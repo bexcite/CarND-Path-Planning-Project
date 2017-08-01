@@ -7,13 +7,20 @@
 #include <vector>
 #include "Eigen-3.3/Eigen/Core"
 #include "Eigen-3.3/Eigen/QR"
+#include "Eigen-3.3/Eigen/LU"
 #include "json.hpp"
+#include "matplotlibcpp.h"
 #include <typeinfo>
+#include <unistd.h>
+
+int LOCAL = 1;
 
 using namespace std;
 
 // for convenience
 using json = nlohmann::json;
+
+namespace plt = matplotlibcpp;
 
 // For converting back and forth between radians and degrees.
 constexpr double pi() { return M_PI; }
@@ -160,6 +167,173 @@ vector<double> getXY(double s, double d, vector<double> maps_s, vector<double> m
 
 }
 
+// Jerk Minimizing Trajectory
+// Returns coefficients for quintic polynomial
+vector<double> JMT(vector<double> start, vector<double> end, double T) {
+  double T2 = T*T;
+  double T3 = T2*T;
+  double T4 = T3*T;
+  double T5 = T4*T;
+
+  Eigen::MatrixXd A(3, 3);
+  A << T3,   T4,    T5,
+       3*T2, 4*T3,  5*T4,
+       6*T,  12*T2, 20*T3;
+
+  Eigen::VectorXd B(3,1);
+  B << end[0] - (start[0] + start[1]*T + 0.5 * start[2] * T2),
+          end[1] - (start[1] + start[2]*T),
+          end[2] - start[2];
+
+  Eigen::VectorXd R = A.inverse() * B;
+
+  return {start[0], start[1], start[2]/2, R(0), R(1), R(2)};
+}
+
+// Calculate polynomial value given 'coeffs' and point 'x'
+double poly_calc(vector<double> coeffs, double x) {
+  double total = 0.0;
+  for (int i = 0; i < coeffs.size(); ++i) {
+    total += coeffs[i] * pow(x, i);
+  }
+  return total;
+}
+
+// Test on local data
+void testLocal(std::string s) {
+  json j = json::parse(s);
+
+  cout << endl << ">>> TESTING on STATIC DATA !!!!!" << endl << endl;
+
+  cout << "testJdata = " << j << endl;
+
+  // Main car's localization Data
+  double car_x = j["x"];
+  double car_y = j["y"];
+  double car_s = j["s"];
+  double car_d = j["d"];
+  double car_yaw = j["yaw"];
+  double car_speed = j["speed"];
+
+  // Previous path data given to the Planner
+  auto previous_path_x = j["previous_path_x"];
+  auto previous_path_y = j["previous_path_y"];
+  // Previous path's end s and d values
+  double end_path_s = j["end_path_s"];
+  double end_path_d = j["end_path_d"];
+
+  // Sensor Fusion Data, a list of all other cars on the same side of the road.
+  auto sensor_fusion = j["sensor_fusion"];
+
+  cout << "decltype = " << typeid(sensor_fusion).name() << endl;
+
+  vector<double> S;
+  vector<double> D;
+  vector<int> ID;
+
+
+  // JMT track
+
+  // Start s_start, s_start_dot, s_start_dot_dot
+
+//  double s_start = car_s;
+//  double s_start_dot = car_speed;
+//  double s_start_dot_dot = 0;
+
+  vector<double> s_start = {car_s, car_speed, 0};
+  vector<double> s_end = {car_s+100, 25, 0};
+
+  vector<double> d_start = {car_d, 0, 0};
+  vector<double> d_end = {2.0, 0, 0};
+
+  double T = 3.0;
+
+  auto s_coeffs = JMT(s_start, s_end, T);
+  auto d_coeffs = JMT(d_start, d_end, T);
+
+  double timestep = 0.02;
+  double t = 0.0;
+  vector<double> SS;
+  vector<double> DD;
+  vector<double> TT;
+  while (t <= T) {
+    double sx = poly_calc(s_coeffs, t);
+    double dx = poly_calc(d_coeffs, t);
+    SS.push_back(sx);
+    DD.push_back(dx);
+    TT.push_back(t);
+    t += timestep;
+  }
+
+//  cout << "s[0] = " << poly_calc(s_coeffs, 0.0) << endl;
+
+
+
+  // End s_end, s_end_dot, s_end_dot_dot
+
+
+  cout << "sensor_fusion:" << endl;
+  for (int i = 0; i < sensor_fusion.size(); ++i) {
+    cout << "[" << sensor_fusion[i][0] << "] = "
+         << sensor_fusion[i][5] << ", " << sensor_fusion[i][6] << endl;
+    ID.push_back(sensor_fusion[i][0]);
+    S.push_back(sensor_fusion[i][5]);
+    D.push_back(sensor_fusion[i][6]);
+  }
+
+
+  /*
+  // Show other cars
+  plt::title("Predictions");
+  plt::plot(S, D, "bo");
+
+  // Annotate
+  for (int i = 0; i < ID.size(); ++i) {
+    ostringstream oss;
+    oss << "  " << ID[i];
+    plt::annotate(oss.str(), S[i], D[i] + 0.2);
+  }
+  */
+
+  // General settings
+  plt::ylim(0, 12);
+  plt::grid(true);
+
+  // Show our car
+  plt::plot({car_s}, {car_d}, "ro");
+
+  // Show traj
+  plt::plot(SS, DD, "bo");
+
+  // Annotate traj
+  for (int i = 0; i < TT.size(); i += 50) {
+    ostringstream oss;
+    oss << "  " << TT[i];
+    plt::annotate(oss.str(), SS[i], DD[i] + 0.2);
+  }
+
+  plt::show();
+
+
+
+
+
+
+
+
+  // cout << "sensor fusion = " << sensor_fusion.dump(2) << endl;
+
+  //cout << "pos = " << car_x << ", " << car_y << ", " << car_yaw << endl;
+  cout << "s,d = " << car_s << ", " << car_d << endl;
+
+  cout << endl <<  "<<<< END STATIC TEST!!!" << endl << endl;
+
+
+}
+
+// Still
+std::string TEST_JSON_1 = "{\"d\":6.164833,\"end_path_d\":0,\"end_path_s\":0,\"previous_path_x\":[],\"previous_path_y\":[],\"s\":124.8336,\"sensor_fusion\":[[0,870.4026,1132.156,19.77468,0.8812704,85.81837,2.667445],[1,976.1345,1138.357,20.86601,4.658673,191.4412,2.503582],[2,978.3932,1130.807,21.25309,4.735238,191.9534,10.36771],[3,1070.347,1165.639,9.830731,4.096075,288.7551,9.991341],[4,919.1696,1132.875,18.96036,0.1730665,134.5592,2.044153],[5,940.7293,1125.507,19.29597,1.361223,155.0642,10.1185],[6,1054.151,1158.943,2.57131,1.055055,271.3134,9.958789],[7,1097.656,1174.81,11.86194,2.911226,319.1452,9.65999],[8,900.5734,1124.793,19.82975,0.01605316,115.9831,10.00751],[9,874.2359,1128.839,19.28486,-0.08530154,89.6629,5.971819],[10,1047.916,1156.4,0.4504717,0.1831465,264.5796,9.95699],[11,1101.201,1184.121,15.72835,2.854728,324.8331,1.480479]],\"speed\":0,\"x\":909.48,\"y\":1128.67,\"yaw\":0}";
+
 int main() {
   uWS::Hub h;
 
@@ -197,6 +371,9 @@ int main() {
   	map_waypoints_dy.push_back(d_y);
   }
 
+
+
+
   h.onMessage([&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy](uWS::WebSocket<uWS::SERVER> *ws, char *data, size_t length,
                      uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
@@ -217,6 +394,8 @@ int main() {
 
         if (event == "telemetry") {
           // j[1] is the data JSON object
+
+          cout << "j[1] = " << j[1] << endl;
 
         	// Main car's localization Data
           	double car_x = j[1]["x"];
@@ -359,12 +538,18 @@ int main() {
     std::cout << "Disconnected" << std::endl;
   });
 
-  int port = 4567;
-  if (h.listen(port)) {
-    std::cout << "Listening to port " << port << std::endl;
+  if (LOCAL) {
+    // Test on local data
+    testLocal(TEST_JSON_1);
   } else {
-    std::cerr << "Failed to listen to port" << std::endl;
-    return -1;
+    int port = 4567;
+    if (h.listen(port)) {
+      std::cout << "Listening to port " << port << std::endl;
+    } else {
+      std::cerr << "Failed to listen to port" << std::endl;
+      return -1;
+    }
+    h.run();
+
   }
-  h.run();
 }
