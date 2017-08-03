@@ -14,7 +14,7 @@
 #include <unistd.h>
 #include "spline.h"
 
-int LOCAL = 1;
+int LOCAL = 0;
 
 double PATH_TIMESTEP = 0.02; // 50 Hz
 
@@ -172,6 +172,33 @@ vector<double> getXY(double s, double d, vector<double> maps_s, vector<double> m
 
 }
 
+
+vector<vector<double> > getXY(vector<double> ss, vector<double> dd, vector<double> maps_s, vector<double> maps_x, vector<double> maps_y, bool adjust = true) {
+
+  vector<double> xx;
+  vector<double> yy;
+  vector<double> prev_xy;
+  for (int i = 0; i < ss.size(); ++i) {
+    vector<double> xy = getXY(ss[i], dd[i], maps_s, maps_x, maps_y);
+    if (adjust && i > 0) {
+      // adjust
+      double Dsd = distance(ss[i-1], dd[i-1], ss[i], dd[i]);
+      double Dxy = distance(prev_xy[0], prev_xy[1], xy[0], xy[1]);
+      cout << "ratio: " << Dsd/Dxy << endl;
+      double dx = (xy[0] - prev_xy[0]) * (Dsd/Dxy);
+      double dy = (xy[1] - prev_xy[1]) * (Dsd/Dxy);
+      xy[0] = prev_xy[0] + dx;
+      xy[1] = prev_xy[1] + dy;
+    }
+    xx.push_back(xy[0]);
+    yy.push_back(xy[1]);
+    prev_xy = xy;
+  }
+
+  return {xx, yy};
+}
+
+
 /* ==== HandlerState ==== */
 class HandlerState {
 public:
@@ -308,13 +335,16 @@ void testLocal(std::string s, vector<double> maps_s, vector<double> maps_x, vect
 //  double s_start_dot = car_speed;
 //  double s_start_dot_dot = 0;
 
-  vector<double> s_start = {car_s, car_speed, 0};
-  vector<double> s_end = {car_s+100, 15, 0};
+  vector<double> s_start = {145.0, car_speed, 0.0}; // {car_s, car_speed, 0};
+  vector<double> s_end = {155.0, 3.0, 0.0}; // {car_s+100, 15, 0};
 
-  vector<double> d_start = {car_d, 0, 0};
-  vector<double> d_end = {car_d, 0, 0};
+//  vector<double> s_start = {car_s, car_speed, 0.0}; // {car_s, car_speed, 0};
+//  vector<double> s_end = {car_s+100, 3.0, 0.0}; // {car_s+100, 15, 0};
 
-  double T = 8.0;
+  vector<double> d_start = {car_d, 0.0, 0.0};
+  vector<double> d_end = {car_d, 0.0, 0.0};
+
+  double T = 4.0;
 
   auto s_coeffs = JMT(s_start, s_end, T);
   auto d_coeffs = JMT(d_start, d_end, T);
@@ -331,7 +361,7 @@ void testLocal(std::string s, vector<double> maps_s, vector<double> maps_x, vect
 
   clk = chrono::high_resolution_clock::now();
 
-  double timestep = 0.2;
+  double timestep = 0.1;
   double t = 0.0;
   vector<double> SS;
   vector<double> DD;
@@ -354,11 +384,40 @@ void testLocal(std::string s, vector<double> maps_s, vector<double> maps_x, vect
 
   vector<double> XX;
   vector<double> YY;
+  vector<double> XX1;
+  vector<double> YY1;
+  vector<double> XX2;
+  vector<double> YY2;
+  auto xy = getXY(SS, DD, maps_s, maps_x, maps_y);
+  XX = xy[0];
+  YY = xy[1];
+
+  vector<double> DD2;
+  vector<double> DD10;
   for (int i = 0; i < SS.size(); ++i) {
-    vector<double> xy = getXY(SS[i], DD[i], maps_s, maps_x, maps_y);
-    XX.push_back(xy[0]);
-    YY.push_back(xy[1]);
+    DD2.push_back(2.0);
+    DD10.push_back(10.0);
   }
+
+  xy = getXY(SS, DD, maps_s, maps_x, maps_y, false);
+  XX1 = xy[0];
+  YY1 = xy[1];
+
+//  xy = getXY(SS, DD10, maps_s, maps_x, maps_y);
+//  XX2 = xy[0];
+//  YY2 = xy[1];
+
+//  for (int i = 0; i < SS.size(); ++i) {
+//    vector<double> xy = getXY(SS[i], DD[i], maps_s, maps_x, maps_y);
+//    XX.push_back(xy[0]);
+//    YY.push_back(xy[1]);
+//    xy = getXY(SS[i], 2.0, maps_s, maps_x, maps_y);
+//    XX1.push_back(xy[0]);
+//    YY1.push_back(xy[1]);
+//    xy = getXY(SS[i], 10.0, maps_s, maps_x, maps_y);
+//    XX2.push_back(xy[0]);
+//    YY2.push_back(xy[1]);
+//  }
 
   dt = chrono::duration<double>(chrono::high_resolution_clock::now() - clk).count();
   cout << "DT getXY = " << dt << endl;
@@ -389,6 +448,8 @@ void testLocal(std::string s, vector<double> maps_s, vector<double> maps_x, vect
   plt::subplot(2, 1, 1);
   plt::title("XY and XY_smooth");
   plt::plot(XX, YY, "bo");
+  plt::plot(XX1, YY1, "rx");
+  plt::plot(XX2, YY2, "bo");
   plt::subplot(2, 1, 2);
   plt::plot(XX_smooth, YY_smooth, "ro");
   plt::show();
@@ -427,7 +488,7 @@ void testLocal(std::string s, vector<double> maps_s, vector<double> maps_x, vect
   plt::grid(true);
 
   // Show our car
-  plt::plot({car_s}, {car_d}, "ro");
+//  plt::plot({car_s}, {car_d}, "ro");
 
   // Show traj
   plt::plot(SS, DD, "bo");
@@ -435,9 +496,45 @@ void testLocal(std::string s, vector<double> maps_s, vector<double> maps_x, vect
   // Annotate traj
   for (int i = 0; i < TT.size(); i += int(1.0/timestep)) {
     ostringstream oss;
-    oss << "  " << TT[i];
+    oss << " " << i; // TT[i]
     plt::annotate(oss.str(), SS[i], DD[i] + 0.2);
   }
+
+  for (int i = 0; i < SS.size(); ++i) {
+    // Perform
+    double s = SS[i];
+    double d = DD[i];
+    int prev_wp = -1;
+    while (s > maps_s[prev_wp + 1] && (prev_wp < (int) (maps_s.size() - 1))) {
+      prev_wp++;
+    }
+    int wp2 = (prev_wp + 1) % maps_x.size();
+    int wp3 = (wp2 + 1) % maps_x.size();
+
+    double heading = atan2((maps_y[wp2]-maps_y[prev_wp]),(maps_x[wp2]-maps_x[prev_wp]));
+    double heading_2 = atan2((maps_y[wp3]-maps_y[wp2]),(maps_x[wp3]-maps_x[wp2]));
+    // the x,y,s along the segment
+    double seg_s = (s-maps_s[prev_wp]);
+    double seg_s_2 = (maps_s[wp2]-s);
+
+    double seg_x = maps_x[prev_wp]+seg_s*cos(heading);
+    double seg_y = maps_y[prev_wp]+seg_s*sin(heading);
+
+    double seg_x_2 = maps_x[wp2]-seg_s_2*cos(heading_2);
+    double seg_y_2 = maps_y[wp2]-seg_s_2*sin(heading_2);
+
+    double perp_heading = heading-pi()/2;
+
+    double x = seg_x + d*cos(perp_heading);
+    double y = seg_y + d*sin(perp_heading);
+
+    cout << "[" << i << "] " << s <<  " = " << prev_wp << ":" << maps_s[prev_wp] << " - " << wp2 << ":" << maps_s[wp2] << endl;
+    cout << "heading = " << heading << ", seg_s = " << seg_s << endl;
+    cout << "seg_x = " << seg_x << ", seg_y = " << seg_y << endl;
+    cout << "heading_2 = " << heading_2  << ", seg_s_2 = " << seg_s_2 << endl;
+    cout << "seg_x_2 = " << seg_x_2 << ", seg_y_2 = " << seg_y_2 << endl;
+  }
+
 
 
   plt::subplot(4, 1, 2);
@@ -644,7 +741,7 @@ int main() {
           auto s_coeffs = JMT(s_start, s_end, T);
           auto d_coeffs = JMT(d_start, d_end, T);
 
-          double timestep = PATH_TIMESTEP;
+          double timestep = PATH_TIMESTEP * 10;
           double t = 0.0;
           vector<double> SS;
           vector<double> DD;
@@ -662,12 +759,34 @@ int main() {
           // Transform from s,d to x,y
           if (!hState.path) {
             cout << "path = ";
-            for (int i = 0; i < SS.size(); ++i) {
-              vector<double> xy = getXY(SS[i], DD[i], map_waypoints_s, map_waypoints_x, map_waypoints_y);
-              next_x_vals.push_back(xy[0]);
-              next_y_vals.push_back(xy[1]);
-              cout << i << ": " << xy[0] << ", " << xy[1] << endl;
+            vector< vector<double> > xy;
+            xy = getXY(SS, DD, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+
+            // Spline Smoothing XY line
+            tk::spline splX;
+            splX.set_points(TT, xy[0]);
+
+            tk::spline splY;
+            splY.set_points(TT, xy[1]);
+
+            vector<double> XX_smooth;
+            vector<double> YY_smooth;
+            t = 0.0;
+            double ts = PATH_TIMESTEP;
+            while (t <= T) {
+              XX_smooth.push_back(splX(t));
+              YY_smooth.push_back(splY(t));
+              t += ts;
             }
+
+            next_x_vals = XX_smooth;
+            next_y_vals = YY_smooth;
+//            for (int i = 0; i < SS.size(); ++i) {
+//              vector<double> xy = getXY(SS[i], DD[i], map_waypoints_s, map_waypoints_x, map_waypoints_y);
+//              next_x_vals.push_back(xy[0]);
+//              next_y_vals.push_back(xy[1]);
+//              cout << i << ": " << xy[0] << ", " << xy[1] << endl;
+//            }
             hState.path = true;
           } else {
             // copy previous path as a whole
