@@ -12,13 +12,18 @@
 #include "matplotlibcpp.h"
 #include <typeinfo>
 #include <unistd.h>
+#include "spline.h"
 
 int LOCAL = 1;
+
+double PATH_TIMESTEP = 0.02; // 50 Hz
 
 using namespace std;
 
 // for convenience
 using json = nlohmann::json;
+
+namespace chrono = std::chrono;
 
 namespace plt = matplotlibcpp;
 
@@ -167,6 +172,44 @@ vector<double> getXY(double s, double d, vector<double> maps_s, vector<double> m
 
 }
 
+/* ==== HandlerState ==== */
+class HandlerState {
+public:
+
+  HandlerState() {
+    prev_clk = chrono::high_resolution_clock::now();
+    initialized = false;
+  }
+
+  virtual ~HandlerState() {}
+
+  chrono::time_point<chrono::high_resolution_clock> prev_clk;
+
+  bool initialized = false;
+
+  bool ready = false;
+
+  bool path = false;
+
+  double dt;
+
+  void tick() {
+
+    // Calc dt time
+    auto clk = chrono::high_resolution_clock::now();
+    dt = chrono::duration<double>(clk - prev_clk).count();
+    prev_clk = clk;
+
+    if (initialized && !ready) {
+      ready = true;
+    }
+    if (!initialized) {
+      initialized = true;
+    }
+  }
+
+};
+
 // Jerk Minimizing Trajectory
 // Returns coefficients for quintic polynomial
 vector<double> JMT(vector<double> start, vector<double> end, double T) {
@@ -190,17 +233,42 @@ vector<double> JMT(vector<double> start, vector<double> end, double T) {
   return {start[0], start[1], start[2]/2, R(0), R(1), R(2)};
 }
 
+// Differentiate
+vector<double> differentiate(vector<double> coeffs) {
+  vector<double> dcoeffs;
+  for (int i = 1; i < coeffs.size(); ++i) {
+    dcoeffs.push_back(i * coeffs[i]);
+  }
+  return dcoeffs;
+}
+
 // Calculate polynomial value given 'coeffs' and point 'x'
-double poly_calc(vector<double> coeffs, double x) {
+double poly_calc(vector<double> coeffs, double x, int order = 0) {
+  vector<double> dcoeffs = coeffs;
+  for (int i = 0; i < order; ++i) {
+    dcoeffs = differentiate(dcoeffs);
+  }
   double total = 0.0;
-  for (int i = 0; i < coeffs.size(); ++i) {
-    total += coeffs[i] * pow(x, i);
+  for (int i = 0; i < dcoeffs.size(); ++i) {
+    total += dcoeffs[i] * pow(x, i);
   }
   return total;
 }
 
+void print_coeffs(std::string s, vector<double> coeffs) {
+  cout << s;
+  if (coeffs.empty()) {
+    cout << " - empty" << endl;
+    return;
+  }
+  for (int i = 0; i < coeffs.size()-1; ++i) {
+    cout << coeffs[i] << ", ";
+  }
+  cout << coeffs[coeffs.size()-1] << endl;
+}
+
 // Test on local data
-void testLocal(std::string s) {
+void testLocal(std::string s, vector<double> maps_s, vector<double> maps_x, vector<double> maps_y) {
   json j = json::parse(s);
 
   cout << endl << ">>> TESTING on STATIC DATA !!!!!" << endl << endl;
@@ -241,22 +309,34 @@ void testLocal(std::string s) {
 //  double s_start_dot_dot = 0;
 
   vector<double> s_start = {car_s, car_speed, 0};
-  vector<double> s_end = {car_s+100, 25, 0};
+  vector<double> s_end = {car_s+100, 15, 0};
 
   vector<double> d_start = {car_d, 0, 0};
-  vector<double> d_end = {2.0, 0, 0};
+  vector<double> d_end = {car_d, 0, 0};
 
-  double T = 3.0;
+  double T = 8.0;
 
   auto s_coeffs = JMT(s_start, s_end, T);
   auto d_coeffs = JMT(d_start, d_end, T);
 
-  double timestep = 0.02;
+  print_coeffs("s_coeffs : ", s_coeffs);
+  print_coeffs("d_coeffs : ", d_coeffs);
+
+  print_coeffs("s_coeffs d1 : ", differentiate(s_coeffs));
+  print_coeffs("d_coeffs d1 : ", differentiate(d_coeffs));
+
+
+  auto clk = chrono::high_resolution_clock::now();
+  double dt;
+
+  clk = chrono::high_resolution_clock::now();
+
+  double timestep = 0.2;
   double t = 0.0;
   vector<double> SS;
   vector<double> DD;
   vector<double> TT;
-  while (t <= T) {
+  while (t <= T+timestep) {
     double sx = poly_calc(s_coeffs, t);
     double dx = poly_calc(d_coeffs, t);
     SS.push_back(sx);
@@ -265,17 +345,61 @@ void testLocal(std::string s) {
     t += timestep;
   }
 
+  dt = chrono::duration<double>(chrono::high_resolution_clock::now() - clk).count();
+  cout << "DT poly_calc = " << dt << endl;
+
 //  cout << "s[0] = " << poly_calc(s_coeffs, 0.0) << endl;
 
+  clk = chrono::high_resolution_clock::now();
 
+  vector<double> XX;
+  vector<double> YY;
+  for (int i = 0; i < SS.size(); ++i) {
+    vector<double> xy = getXY(SS[i], DD[i], maps_s, maps_x, maps_y);
+    XX.push_back(xy[0]);
+    YY.push_back(xy[1]);
+  }
+
+  dt = chrono::duration<double>(chrono::high_resolution_clock::now() - clk).count();
+  cout << "DT getXY = " << dt << endl;
+
+
+  clk = chrono::high_resolution_clock::now();
+
+  // Smoothing XY line
+  tk::spline splX;
+  splX.set_points(TT, XX);
+
+  tk::spline splY;
+  splY.set_points(TT, YY);
+
+  vector<double> XX_smooth;
+  vector<double> YY_smooth;
+  t = 0.0;
+  double ts = 0.02;
+  while (t <= T) {
+    XX_smooth.push_back(splX(t));
+    YY_smooth.push_back(splY(t));
+    t += ts;
+  }
+
+  dt = chrono::duration<double>(chrono::high_resolution_clock::now() - clk).count();
+  cout << "DT smoothing = " << dt << endl;
+
+  plt::subplot(2, 1, 1);
+  plt::title("XY and XY_smooth");
+  plt::plot(XX, YY, "bo");
+  plt::subplot(2, 1, 2);
+  plt::plot(XX_smooth, YY_smooth, "ro");
+  plt::show();
 
   // End s_end, s_end_dot, s_end_dot_dot
 
 
   cout << "sensor_fusion:" << endl;
   for (int i = 0; i < sensor_fusion.size(); ++i) {
-    cout << "[" << sensor_fusion[i][0] << "] = "
-         << sensor_fusion[i][5] << ", " << sensor_fusion[i][6] << endl;
+//    cout << "[" << sensor_fusion[i][0] << "] = "
+//         << sensor_fusion[i][5] << ", " << sensor_fusion[i][6] << endl;
     ID.push_back(sensor_fusion[i][0]);
     S.push_back(sensor_fusion[i][5]);
     D.push_back(sensor_fusion[i][6]);
@@ -295,6 +419,9 @@ void testLocal(std::string s) {
   }
   */
 
+  plt::subplot(4, 1, 1);
+  plt::title("Trajectory");
+
   // General settings
   plt::ylim(0, 12);
   plt::grid(true);
@@ -306,18 +433,80 @@ void testLocal(std::string s) {
   plt::plot(SS, DD, "bo");
 
   // Annotate traj
-  for (int i = 0; i < TT.size(); i += 50) {
+  for (int i = 0; i < TT.size(); i += int(1.0/timestep)) {
     ostringstream oss;
     oss << "  " << TT[i];
     plt::annotate(oss.str(), SS[i], DD[i] + 0.2);
   }
 
+
+  plt::subplot(4, 1, 2);
+  plt::title("Speed (v)");
+
+  vector<double> SS_v;
+  vector<double> DD_v;
+  for (int i = 0; i < TT.size(); ++i) {
+    SS_v.push_back(poly_calc(s_coeffs, TT[i], 1));
+    DD_v.push_back(poly_calc(d_coeffs, TT[i], 1));
+  }
+  plt::plot(TT, SS_v, "bo");
+
+  // Annotate speed
+  for (int i = 0; i < TT.size(); i += int(1.0/timestep)) {
+    ostringstream oss;
+    oss << "  " << TT[i];
+    plt::annotate(oss.str(), TT[i], SS_v[i]);
+  }
+
+  plt::subplot(4, 1, 3);
+  plt::title("Acc (a)");
+
+  // Total acc < 10m/s*s
+
+  vector<double> SS_a;
+  vector<double> DD_a;
+  double total_acc = 0.0;
+  for (int i = 0; i < TT.size(); ++i) {
+    double a = poly_calc(s_coeffs, TT[i], 2);
+    SS_a.push_back(a);
+    DD_a.push_back(poly_calc(d_coeffs, TT[i], 2));
+    total_acc += abs(a * timestep);
+  }
+  plt::plot(TT, SS_a, "bo");
+  cout << "total_acc = " << total_acc << endl;
+
+  // Annotate acc
+  for (int i = 0; i < TT.size(); i += int(1.0/timestep)) {
+    ostringstream oss;
+    oss << "  " << TT[i];
+    plt::annotate(oss.str(), TT[i], SS_a[i]);
+  }
+
+  plt::subplot(4, 1, 4);
+  plt::title("Jerk (jerk)");
+
+  // Total jerk < 10m/s*s*s
+
+  vector<double> SS_j;
+  vector<double> DD_j;
+  double total_jerk = 0.0;
+  for (int i = 0; i < TT.size(); ++i) {
+    double jerk = poly_calc(s_coeffs, TT[i], 3);
+    SS_j.push_back(jerk);
+    DD_j.push_back(poly_calc(d_coeffs, TT[i], 3));
+    total_jerk += abs(jerk * timestep);
+  }
+  plt::plot(TT, SS_j, "bo");
+  cout << "total_jerk = " << total_jerk << endl;
+
+  // Annotate jerk
+  for (int i = 0; i < TT.size(); i += int(1.0/timestep)) {
+    ostringstream oss;
+    oss << "  " << TT[i];
+    plt::annotate(oss.str(), TT[i], SS_j[i]);
+  }
+
   plt::show();
-
-
-
-
-
 
 
 
@@ -343,6 +532,9 @@ int main() {
   vector<double> map_waypoints_s;
   vector<double> map_waypoints_dx;
   vector<double> map_waypoints_dy;
+
+  // Handler State
+  HandlerState hState;
 
   // Waypoint map to read from
   string map_file_ = "../data/highway_map.csv";
@@ -374,7 +566,7 @@ int main() {
 
 
 
-  h.onMessage([&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy](uWS::WebSocket<uWS::SERVER> *ws, char *data, size_t length,
+  h.onMessage([&hState,&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy](uWS::WebSocket<uWS::SERVER> *ws, char *data, size_t length,
                      uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
@@ -385,7 +577,7 @@ int main() {
 
       auto s = hasData(data);
 
-      cout << "s = " << s << endl;
+//      cout << "s = " << s << endl;
 
       if (s != "") {
         auto j = json::parse(s);
@@ -395,115 +587,193 @@ int main() {
         if (event == "telemetry") {
           // j[1] is the data JSON object
 
-          cout << "j[1] = " << j[1] << endl;
+//          cout << "j[1] = " << j[1] << endl;
 
         	// Main car's localization Data
-          	double car_x = j[1]["x"];
-          	double car_y = j[1]["y"];
-          	double car_s = j[1]["s"];
-          	double car_d = j[1]["d"];
-          	double car_yaw = j[1]["yaw"];
-          	double car_speed = j[1]["speed"];
+          double car_x = j[1]["x"];
+          double car_y = j[1]["y"];
+          double car_s = j[1]["s"];
+          double car_d = j[1]["d"];
+          double car_yaw = j[1]["yaw"];
+          double car_speed = j[1]["speed"];
 
-          	// Previous path data given to the Planner
-          	auto previous_path_x = j[1]["previous_path_x"];
-          	auto previous_path_y = j[1]["previous_path_y"];
-          	// Previous path's end s and d values
-          	double end_path_s = j[1]["end_path_s"];
-          	double end_path_d = j[1]["end_path_d"];
+          // Previous path data given to the Planner
+          auto previous_path_x = j[1]["previous_path_x"];
+          auto previous_path_y = j[1]["previous_path_y"];
+          // Previous path's end s and d values
+          double end_path_s = j[1]["end_path_s"];
+          double end_path_d = j[1]["end_path_d"];
 
-          	// Sensor Fusion Data, a list of all other cars on the same side of the road.
-          	auto sensor_fusion = j[1]["sensor_fusion"];
+          // Sensor Fusion Data, a list of all other cars on the same side of the road.
+          auto sensor_fusion = j[1]["sensor_fusion"];
 
-          	json msgJson;
 
-          	vector<double> next_x_vals;
-          	vector<double> next_y_vals;
+          json msgJson;
 
-            /*
-            double dist_inc1 = 0.5/50;
-            double dist = 0;
-            for (int i = 0; i < 50; i++) {
-              dist += dist_inc1 * (i+1);
-              next_x_vals.push_back(car_x + (dist) * cos(deg2rad(car_yaw)));
-              next_y_vals.push_back(car_y + (dist) * sin(deg2rad(car_yaw)));
+          vector<double> next_x_vals;
+          vector<double> next_y_vals;
+
+          // Tick for dt and other params
+          hState.tick();
+
+          // Check do we have all info
+          if (!hState.ready) {
+            // Send empty
+            cout << "Not READY yet!" << endl;
+            msgJson["next_x"] = next_x_vals;
+            msgJson["next_y"] = next_y_vals;
+            auto msg = "42[\"control\","+ msgJson.dump()+"]";
+            ws->send(msg.data(), msg.length(), uWS::OpCode::TEXT);
+            return;
+          }
+
+          // We are ready with DT
+          cout << "DT = " << hState.dt << endl;
+          cout << "s,d = " << car_s << ", " << car_d << endl;
+          cout << "prev_path.size = " << previous_path_x.size() << endl;
+
+          // Make a straight line trajectory
+          vector<double> s_start = {car_s, car_speed, 0};
+          vector<double> s_end = {car_s+100, 20, 0};
+
+          vector<double> d_start = {car_d, 0, 0};
+          vector<double> d_end = {car_d, 0, 0};
+
+          double T = 8.0;
+
+          auto s_coeffs = JMT(s_start, s_end, T);
+          auto d_coeffs = JMT(d_start, d_end, T);
+
+          double timestep = PATH_TIMESTEP;
+          double t = 0.0;
+          vector<double> SS;
+          vector<double> DD;
+          vector<double> TT;
+          while (t <= T+timestep) {
+            double sx = poly_calc(s_coeffs, t);
+            double dx = poly_calc(d_coeffs, t);
+            SS.push_back(sx);
+            DD.push_back(dx);
+            TT.push_back(t);
+            t += timestep;
+          }
+
+
+          // Transform from s,d to x,y
+          if (!hState.path) {
+            cout << "path = ";
+            for (int i = 0; i < SS.size(); ++i) {
+              vector<double> xy = getXY(SS[i], DD[i], map_waypoints_s, map_waypoints_x, map_waypoints_y);
+              next_x_vals.push_back(xy[0]);
+              next_y_vals.push_back(xy[1]);
+              cout << i << ": " << xy[0] << ", " << xy[1] << endl;
             }
-            */
-
-            // Test sensor fusion
-            // Sort/Comp https://stackoverflow.com/questions/33046173/sorting-json-values-alphabetically-c
-
-            // Typeid: https://stackoverflow.com/questions/81870/is-it-possible-to-print-a-variables-type-in-standard-c
-            cout << "decltype = " << typeid(sensor_fusion).name() << endl;
-
-            cout << "sensor_fusion:" << endl;
-            for (int i = 0; i < sensor_fusion.size(); ++i) {
-              cout << "[" << sensor_fusion[i][0] << "] = "
-                   << sensor_fusion[i][5] << ", " << sensor_fusion[i][6] << endl;
-            }
-
-
-            // cout << "sensor fusion = " << sensor_fusion.dump(2) << endl;
-
-            //cout << "pos = " << car_x << ", " << car_y << ", " << car_yaw << endl;
-            cout << "s,d = " << car_s << ", " << car_d << endl;
-
-
-            /*
-            double pos_x;
-            double pos_y;
-            double angle;
-            int path_size = previous_path_x.size();
-
-            cout << "path_size = " << path_size << endl;
-
-            for (int i = 0; i < path_size; i++) {
+            hState.path = true;
+          } else {
+            // copy previous path as a whole
+            for (int i = 0; i < previous_path_x.size(); ++i) {
               next_x_vals.push_back(previous_path_x[i]);
               next_y_vals.push_back(previous_path_y[i]);
             }
 
-            if (path_size == 0) {
-              pos_x = car_x;
-              pos_y = car_y;
-              angle = deg2rad(car_yaw);
-            } else {
-              pos_x = previous_path_x[path_size-1];
-              pos_y = previous_path_y[path_size-1];
-              double pos_x2 = previous_path_x[path_size-2];
-              double pos_y2 = previous_path_y[path_size-2];
-              angle = atan2(pos_y - pos_y2, pos_x - pos_x2);
 
-            }
+          }
 
-            double dist_inc = 0.5;
-            for (int i = 0; i < 50 - path_size; i++) {
-              next_x_vals.push_back(pos_x + (dist_inc) * cos(angle + (i+1)*pi()/100));
-              next_y_vals.push_back(pos_y + (dist_inc) * sin(angle + (i+1)*pi()/100));
-              pos_x += (dist_inc) * cos(angle + (i+1)*pi()/100);
-              pos_y += (dist_inc) * sin(angle + (i+1)*pi()/100);
-            }
-            */
-
-            /*
-            TODO:
-              1) Accelerate to the 25m/s in the same line and drive on one speed
-              in the line.
-              2) Follow the vehicle in this line. (keep distance)
-              3) Define states and FSM.
-              4) Generate traj for different states.
-              5) Look at spline.
-            */
+          if (!next_x_vals.empty()) {
+            cout << "next_vals.size = " << next_x_vals.size() << " from {"
+                 << next_x_vals[0] << ", " << next_y_vals[0] << "} to {"
+                 << next_x_vals[next_x_vals.size()-1] << ", " << next_y_vals[next_y_vals.size()-1]
+                 << "}" << endl;
+          } else {
+            cout << "next_vals.size = " << next_x_vals.size() << endl;
+          }
 
 
-          	// TODO: define a path made up of (x,y) points that the car will visit sequentially every .02 seconds
-          	msgJson["next_x"] = next_x_vals;
-          	msgJson["next_y"] = next_y_vals;
+
+          /*
+          double dist_inc1 = 0.5/50;
+          double dist = 0;
+          for (int i = 0; i < 50; i++) {
+            dist += dist_inc1 * (i+1);
+            next_x_vals.push_back(car_x + (dist) * cos(deg2rad(car_yaw)));
+            next_y_vals.push_back(car_y + (dist) * sin(deg2rad(car_yaw)));
+          }
+          */
+
+          // Test sensor fusion
+          // Sort/Comp https://stackoverflow.com/questions/33046173/sorting-json-values-alphabetically-c
+
+          // Typeid: https://stackoverflow.com/questions/81870/is-it-possible-to-print-a-variables-type-in-standard-c
+//          cout << "decltype = " << typeid(sensor_fusion).name() << endl;
+//
+//          cout << "sensor_fusion:" << endl;
+//          for (int i = 0; i < sensor_fusion.size(); ++i) {
+//            cout << "[" << sensor_fusion[i][0] << "] = "
+//                 << sensor_fusion[i][5] << ", " << sensor_fusion[i][6] << endl;
+//          }
 
 
-          	auto msg = "42[\"control\","+ msgJson.dump()+"]";
+          // cout << "sensor fusion = " << sensor_fusion.dump(2) << endl;
 
-          	//this_thread::sleep_for(chrono::milliseconds(1000));
-          	ws->send(msg.data(), msg.length(), uWS::OpCode::TEXT);
+          //cout << "pos = " << car_x << ", " << car_y << ", " << car_yaw << endl;
+//          cout << "s,d = " << car_s << ", " << car_d << endl;
+
+
+          /*
+          double pos_x;
+          double pos_y;
+          double angle;
+          int path_size = previous_path_x.size();
+
+          cout << "path_size = " << path_size << endl;
+
+          for (int i = 0; i < path_size; i++) {
+            next_x_vals.push_back(previous_path_x[i]);
+            next_y_vals.push_back(previous_path_y[i]);
+          }
+
+          if (path_size == 0) {
+            pos_x = car_x;
+            pos_y = car_y;
+            angle = deg2rad(car_yaw);
+          } else {
+            pos_x = previous_path_x[path_size-1];
+            pos_y = previous_path_y[path_size-1];
+            double pos_x2 = previous_path_x[path_size-2];
+            double pos_y2 = previous_path_y[path_size-2];
+            angle = atan2(pos_y - pos_y2, pos_x - pos_x2);
+
+          }
+
+          double dist_inc = 0.5;
+          for (int i = 0; i < 50 - path_size; i++) {
+            next_x_vals.push_back(pos_x + (dist_inc) * cos(angle + (i+1)*pi()/100));
+            next_y_vals.push_back(pos_y + (dist_inc) * sin(angle + (i+1)*pi()/100));
+            pos_x += (dist_inc) * cos(angle + (i+1)*pi()/100);
+            pos_y += (dist_inc) * sin(angle + (i+1)*pi()/100);
+          }
+          */
+
+          /*
+          TODO:
+            1) Accelerate to the 25m/s in the same line and drive on one speed
+            in the line.
+            2) Follow the vehicle in this line. (keep distance)
+            3) Define states and FSM.
+            4) Generate traj for different states.
+            5) Look at spline.
+          */
+
+
+          // TODO: define a path made up of (x,y) points that the car will visit sequentially every .02 seconds
+          msgJson["next_x"] = next_x_vals;
+          msgJson["next_y"] = next_y_vals;
+
+
+          auto msg = "42[\"control\","+ msgJson.dump()+"]";
+
+          //this_thread::sleep_for(chrono::milliseconds(1000));
+          ws->send(msg.data(), msg.length(), uWS::OpCode::TEXT);
 
         }
       } else {
@@ -540,7 +810,7 @@ int main() {
 
   if (LOCAL) {
     // Test on local data
-    testLocal(TEST_JSON_1);
+    testLocal(TEST_JSON_1, map_waypoints_s, map_waypoints_x, map_waypoints_y);
   } else {
     int port = 4567;
     if (h.listen(port)) {
