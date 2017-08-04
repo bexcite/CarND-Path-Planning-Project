@@ -15,11 +15,11 @@
 #include "spline.h"
 #include "helpers.h"
 #include "test-local.h"
+#include "constants.h"
 
-int LOCAL = 0;
 
-double PATH_TIMESTEP = 0.02; // 50 Hz - rate for final path
-double TRAJ_TIMESTEP = 0.2; // 5 Hz - rate for calculating trajectory
+
+
 
 using namespace std;
 
@@ -176,10 +176,13 @@ int main() {
             return;
           }
 
+          // Speed in m/s
+          double car_speed_m = 1609.344 * car_speed / 3600.0;
+
           // We are ready with DT
           cout << "DT = " << hState.dt << endl;
           cout << "x,y = " << car_x << ", " << car_y << endl;
-          cout << "car_speed = " << car_speed << endl;
+          cout << "car_speed = " << car_speed << "( " << car_speed_m << " )" << endl;
           cout << "s,d = " << car_s << ", " << car_d << endl;
           cout << "end_path s,d = " << end_path_s << ", " << end_path_d << endl;
           cout << "prev_path.size = " << previous_path_x.size() << endl;
@@ -224,47 +227,27 @@ int main() {
 
             print_vals(next_x_vals, next_y_vals);
 
-            /*
-            xy = getXY(SS, DD, map_waypoints_s, map_waypoints_x, map_waypoints_y);
-
-//            next_x_vals = xy[0];
-//            next_y_vals = xy[1];
-
-
-            // Spline Smoothing XY line
-            tk::spline splX;
-            splX.set_points(TT, xy[0]);
-
-            tk::spline splY;
-            splY.set_points(TT, xy[1]);
-
-            vector<double> XX_smooth;
-            vector<double> YY_smooth;
-            t = 0.0;
-            double ts = PATH_TIMESTEP;
-            while (t <= T) {
-              XX_smooth.push_back(splX(t));
-              YY_smooth.push_back(splY(t));
-              t += ts;
-            }
-
-            next_x_vals = XX_smooth;
-            next_y_vals = YY_smooth;
-            */
-
-
-
-
-
-
-//            for (int i = 0; i < SS.size(); ++i) {
-//              vector<double> xy = getXY(SS[i], DD[i], map_waypoints_s, map_waypoints_x, map_waypoints_y);
-//              next_x_vals.push_back(xy[0]);
-//              next_y_vals.push_back(xy[1]);
-//              cout << i << ": " << xy[0] << ", " << xy[1] << endl;
-//            }
             hState.path = true;
           } else {
+
+            vector<double> prevTT;
+            for (int i = 0; i < previous_path_x.size(); ++i) {
+              prevTT.push_back(i * PATH_TIMESTEP);
+            }
+
+            // Spline Smoothing XY line
+            tk::spline splPrevX;
+            splPrevX.set_points(prevTT, previous_path_x);
+
+            tk::spline splPrevY;
+            splPrevY.set_points(prevTT, previous_path_y);
+
+            double prev_speed_x = splPrevX.deriv(1, 0.0);
+            double prev_speed_y = splPrevY.deriv(1, 0.0);
+
+            cout << "prev_speed = " << prev_speed_x << ", " << prev_speed_y << endl;
+            cout << "prev_speed_v = " << distance(0,0,prev_speed_x,prev_speed_y) << endl;
+
             // copy previous path as a whole
             for (int i = 0; i < previous_path_x.size(); ++i) {
               next_x_vals.push_back(previous_path_x[i]);

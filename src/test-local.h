@@ -21,6 +21,8 @@
 #include <unistd.h>
 #include "spline.h"
 #include "helpers.h"
+#include "constants.h"
+
 
 using namespace std;
 
@@ -72,16 +74,17 @@ void testLocal(std::string s, vector<double> maps_s, vector<double> maps_x, vect
 //  double s_start_dot = car_speed;
 //  double s_start_dot_dot = 0;
 
-  vector<double> s_start = {145.0, car_speed, 0.0}; // {car_s, car_speed, 0};
-  vector<double> s_end = {155.0, 3.0, 0.0}; // {car_s+100, 15, 0};
+  // Curved part
+//  vector<double> s_start = {145.0, car_speed, 0.0}; // {car_s, car_speed, 0};
+//  vector<double> s_end = {155.0, 3.0, 0.0}; // {car_s+100, 15, 0};
 
-//  vector<double> s_start = {car_s, car_speed, 0.0}; // {car_s, car_speed, 0};
-//  vector<double> s_end = {car_s+100, 3.0, 0.0}; // {car_s+100, 15, 0};
+  vector<double> s_start = {car_s, 13, 0.0}; // {car_s, car_speed, 0};
+  vector<double> s_end = {car_s+100, 15.0, 0.0}; // {car_s+100, 15, 0};
 
   vector<double> d_start = {car_d, 0.0, 0.0};
   vector<double> d_end = {car_d, 0.0, 0.0};
 
-  double T = 4.0;
+  double T = 7.0;
 
   auto s_coeffs = JMT(s_start, s_end, T);
   auto d_coeffs = JMT(d_start, d_end, T);
@@ -98,7 +101,7 @@ void testLocal(std::string s, vector<double> maps_s, vector<double> maps_x, vect
 
   clk = chrono::high_resolution_clock::now();
 
-  double timestep = 0.1;
+  double timestep = TRAJ_TIMESTEP;
   double t = 0.0;
   vector<double> SS;
   vector<double> DD;
@@ -167,6 +170,33 @@ void testLocal(std::string s, vector<double> maps_s, vector<double> maps_x, vect
     t += ts;
   }
 
+  // Get XY to Frenet transform
+  tk::spline splXY;
+  splXY.set_points(XX, YY);
+
+  vector<double> SS_b;
+  vector<double> DD_b;
+  vector<double> prev_sd;
+  for (int i = 0; i < XX.size(); ++i) {
+//    double th = atan(splXY.deriv(1, XX[i]));
+    double th = car_yaw;
+    cout << "th = " << th << endl;
+    auto sd = getFrenet(XX[i], YY[i], th, maps_x, maps_y);
+    if (i > 0) {
+      double Dxy = distance(XX[i-1], YY[i-1], XX[i], YY[i]);
+      double Dsd = distance(prev_sd[0], prev_sd[1], sd[0], sd[1]);
+      cout << "ratio fre: " << Dxy/Dsd << endl;
+      double ds = (sd[0] - prev_sd[0]) * (Dxy/Dsd);
+      double dd = (sd[1] - prev_sd[1]) * (Dxy/Dsd);
+      sd[0] = prev_sd[0] + ds;
+      sd[1] = prev_sd[1] + dd;
+
+    }
+    SS_b.push_back(sd[0]);
+    DD_b.push_back(sd[1]);
+    prev_sd = sd;
+  }
+
   dt = chrono::duration<double>(chrono::high_resolution_clock::now() - clk).count();
   cout << "DT smoothing = " << dt << endl;
 
@@ -174,9 +204,11 @@ void testLocal(std::string s, vector<double> maps_s, vector<double> maps_x, vect
   plt::title("XY and XY_smooth");
   plt::plot(XX, YY, "bo");
   plt::plot(XX1, YY1, "rx");
-  plt::plot(XX2, YY2, "bo");
+//  plt::plot(XX2, YY2, "bo");
+
   plt::subplot(2, 1, 2);
-  plt::plot(XX_smooth, YY_smooth, "ro");
+//  plt::plot(XX_smooth, YY_smooth, "ro");
+  plt::plot(SS_b, DD_b, "bo");
   plt::show();
 
   // End s_end, s_end_dot, s_end_dot_dot
