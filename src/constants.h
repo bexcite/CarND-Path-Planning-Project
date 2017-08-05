@@ -6,11 +6,11 @@
 #define PATH_PLANNING_CONSTANTS_H
 
 // Activates local execution with graphs (need matplotlib in include)
-int LOCAL = 1;
+int LOCAL = 0;
 
 
-double PATH_TIMESTEP = 0.02; // 50 Hz - rate for final path
-double TRAJ_TIMESTEP = 0.2; // 5 Hz - rate for calculating trajectory
+#define PATH_TIMESTEP 0.02  // 50 Hz - rate for final path
+#define TRAJ_TIMESTEP 0.2   // 5 Hz - rate for calculating trajectory
 
 double METERS_PER_MILE = 1609.344;
 

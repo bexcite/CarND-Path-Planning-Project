@@ -86,14 +86,19 @@ void testLocal(std::string s, vector<double> maps_s, vector<double> maps_x, vect
 
   double T = 7.0;
 
+  /*
   auto s_coeffs = JMT(s_start, s_end, T);
   auto d_coeffs = JMT(d_start, d_end, T);
+  */
+  auto traj = getJMT(s_start, s_end, d_start, d_end, T);
 
-  print_coeffs("s_coeffs : ", s_coeffs);
-  print_coeffs("d_coeffs : ", d_coeffs);
+  cout << "Trajectory = " << traj.str() << endl;
 
-  print_coeffs("s_coeffs d1 : ", differentiate(s_coeffs));
-  print_coeffs("d_coeffs d1 : ", differentiate(d_coeffs));
+  print_coeffs("s_coeffs : ", traj.s_coeffs);
+  print_coeffs("d_coeffs : ", traj.d_coeffs);
+
+  print_coeffs("s_coeffs d1 : ", differentiate(traj.s_coeffs));
+  print_coeffs("d_coeffs d1 : ", differentiate(traj.d_coeffs));
 
 
   auto clk = chrono::high_resolution_clock::now();
@@ -107,8 +112,8 @@ void testLocal(std::string s, vector<double> maps_s, vector<double> maps_x, vect
   vector<double> DD;
   vector<double> TT;
   while (t <= T+timestep) {
-    double sx = poly_calc(s_coeffs, t);
-    double dx = poly_calc(d_coeffs, t);
+    double sx = poly_calc(traj.s_coeffs, t);
+    double dx = poly_calc(traj.d_coeffs, t);
     SS.push_back(sx);
     DD.push_back(dx);
     TT.push_back(t);
@@ -170,7 +175,12 @@ void testLocal(std::string s, vector<double> maps_s, vector<double> maps_x, vect
     t += ts;
   }
 
+  auto xy_smooth = getXYPath(SS, DD, TRAJ_TIMESTEP, maps_s, maps_x, maps_y);
+  XX_smooth = xy_smooth[0];
+  YY_smooth = xy_smooth[1];
+
   // Get XY to Frenet transform
+  /*
   tk::spline splXY;
   splXY.set_points(XX, YY);
 
@@ -178,7 +188,6 @@ void testLocal(std::string s, vector<double> maps_s, vector<double> maps_x, vect
   vector<double> DD_b;
   vector<double> prev_sd;
   for (int i = 0; i < XX.size(); ++i) {
-//    double th = atan(splXY.deriv(1, XX[i]));
     double th = car_yaw;
     cout << "th = " << th << endl;
     auto sd = getFrenet(XX[i], YY[i], th, maps_x, maps_y);
@@ -196,6 +205,7 @@ void testLocal(std::string s, vector<double> maps_s, vector<double> maps_x, vect
     DD_b.push_back(sd[1]);
     prev_sd = sd;
   }
+   */
 
   dt = chrono::duration<double>(chrono::high_resolution_clock::now() - clk).count();
   cout << "DT smoothing = " << dt << endl;
@@ -207,8 +217,8 @@ void testLocal(std::string s, vector<double> maps_s, vector<double> maps_x, vect
 //  plt::plot(XX2, YY2, "bo");
 
   plt::subplot(2, 1, 2);
-//  plt::plot(XX_smooth, YY_smooth, "ro");
-  plt::plot(SS_b, DD_b, "bo");
+  plt::plot(XX_smooth, YY_smooth, "ro");
+//  plt::plot(SS_b, DD_b, "bo");
   plt::show();
 
   // End s_end, s_end_dot, s_end_dot_dot
@@ -257,6 +267,7 @@ void testLocal(std::string s, vector<double> maps_s, vector<double> maps_x, vect
     plt::annotate(oss.str(), SS[i], DD[i] + 0.2);
   }
 
+  /*
   for (int i = 0; i < SS.size(); ++i) {
     // Perform
     double s = SS[i];
@@ -291,7 +302,7 @@ void testLocal(std::string s, vector<double> maps_s, vector<double> maps_x, vect
     cout << "heading_2 = " << heading_2  << ", seg_s_2 = " << seg_s_2 << endl;
     cout << "seg_x_2 = " << seg_x_2 << ", seg_y_2 = " << seg_y_2 << endl;
   }
-
+  */
 
 
   plt::subplot(4, 1, 2);
@@ -300,8 +311,8 @@ void testLocal(std::string s, vector<double> maps_s, vector<double> maps_x, vect
   vector<double> SS_v;
   vector<double> DD_v;
   for (int i = 0; i < TT.size(); ++i) {
-    SS_v.push_back(poly_calc(s_coeffs, TT[i], 1));
-    DD_v.push_back(poly_calc(d_coeffs, TT[i], 1));
+    SS_v.push_back(poly_calc(traj.s_coeffs, TT[i], 1));
+    DD_v.push_back(poly_calc(traj.d_coeffs, TT[i], 1));
   }
   plt::plot(TT, SS_v, "bo");
 
@@ -321,9 +332,9 @@ void testLocal(std::string s, vector<double> maps_s, vector<double> maps_x, vect
   vector<double> DD_a;
   double total_acc = 0.0;
   for (int i = 0; i < TT.size(); ++i) {
-    double a = poly_calc(s_coeffs, TT[i], 2);
+    double a = poly_calc(traj.s_coeffs, TT[i], 2);
     SS_a.push_back(a);
-    DD_a.push_back(poly_calc(d_coeffs, TT[i], 2));
+    DD_a.push_back(poly_calc(traj.d_coeffs, TT[i], 2));
     total_acc += abs(a * timestep);
   }
   plt::plot(TT, SS_a, "bo");
@@ -345,9 +356,9 @@ void testLocal(std::string s, vector<double> maps_s, vector<double> maps_x, vect
   vector<double> DD_j;
   double total_jerk = 0.0;
   for (int i = 0; i < TT.size(); ++i) {
-    double jerk = poly_calc(s_coeffs, TT[i], 3);
+    double jerk = poly_calc(traj.s_coeffs, TT[i], 3);
     SS_j.push_back(jerk);
-    DD_j.push_back(poly_calc(d_coeffs, TT[i], 3));
+    DD_j.push_back(poly_calc(traj.d_coeffs, TT[i], 3));
     total_jerk += abs(jerk * timestep);
   }
   plt::plot(TT, SS_j, "bo");

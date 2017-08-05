@@ -20,9 +20,79 @@
 //#include <typeinfo>
 #include <unistd.h>
 #include "spline.h"
-#include "helpers.h"
+#include "constants.h"
 
 using namespace std;
+
+
+/* ==== Some Forward Definitions =========== */
+
+string str_coeffs(vector<double> coeffs);
+double poly_calc(vector<double> coeffs, double x, int order);
+
+
+/* === Trajectory description ==== */
+struct Trajectory {
+  vector<double> s_coeffs;
+  vector<double> d_coeffs;
+  double T;
+  string str() {
+    ostringstream oss;
+    oss << "(" << str_coeffs(s_coeffs) << ", " << str_coeffs(d_coeffs) << ", " << T << ")";
+    return oss.str();
+  }
+};
+
+
+
+/* ==== HandlerState ==== */
+class HandlerState {
+public:
+
+  HandlerState() {
+    prev_clk = chrono::high_resolution_clock::now();
+    initialized = false;
+  }
+
+  virtual ~HandlerState() {}
+
+  chrono::time_point<chrono::high_resolution_clock> prev_clk;
+
+  bool initialized = false;
+
+  bool ready = false;
+
+  bool path = false;
+
+  double dt;
+
+  double prev_v;
+
+  double acc;
+
+  Trajectory prev_traj;
+
+  void tick() {
+
+    // Calc dt time
+    auto clk = chrono::high_resolution_clock::now();
+    dt = chrono::duration<double>(clk - prev_clk).count();
+    prev_clk = clk;
+
+    if (initialized && !ready) {
+      ready = true;
+    }
+    if (!initialized) {
+      initialized = true;
+    }
+  }
+
+};
+
+
+
+
+
 
 
 // For converting back and forth between radians and degrees.
@@ -241,6 +311,52 @@ vector<vector<double> > getXYPath(vector<double> ss, vector<double> dd, double t
 
 }
 
+
+// Differentiate
+vector<double> differentiate(vector<double> coeffs) {
+  vector<double> dcoeffs;
+  for (int i = 1; i < coeffs.size(); ++i) {
+    dcoeffs.push_back(i * coeffs[i]);
+  }
+  return dcoeffs;
+}
+
+
+
+// Calculate polynomial value given 'coeffs' and point 'x'
+double poly_calc(vector<double> coeffs, double x, int order = 0) {
+  vector<double> dcoeffs = coeffs;
+  for (int i = 0; i < order; ++i) {
+    dcoeffs = differentiate(dcoeffs);
+  }
+  double total = 0.0;
+  for (int i = 0; i < dcoeffs.size(); ++i) {
+    total += dcoeffs[i] * pow(x, i);
+  }
+  return total;
+}
+
+
+
+vector<vector<double> > getSDbyTraj(Trajectory traj, double timestep = TRAJ_TIMESTEP) {
+
+  vector<double> SS;
+  vector<double> DD;
+  vector<double> TT;
+
+  double t = 0.0;
+//  double timestep = TRAJ_TIMESTEP;
+  while (t <= traj.T + timestep) {
+    double sx = poly_calc(traj.s_coeffs, t);
+    double dx = poly_calc(traj.d_coeffs, t);
+    SS.push_back(sx);
+    DD.push_back(dx);
+    TT.push_back(t);
+    t += timestep;
+  }
+  return {SS, DD, TT};
+}
+
 // Jerk Minimizing Trajectory
 // Returns coefficients for quintic polynomial
 vector<double> JMT(vector<double> start, vector<double> end, double T) {
@@ -265,28 +381,20 @@ vector<double> JMT(vector<double> start, vector<double> end, double T) {
 }
 
 
-// Differentiate
-vector<double> differentiate(vector<double> coeffs) {
-  vector<double> dcoeffs;
-  for (int i = 1; i < coeffs.size(); ++i) {
-    dcoeffs.push_back(i * coeffs[i]);
-  }
-  return dcoeffs;
+Trajectory getJMT(vector<double> s_start, vector<double> s_end, vector<double> d_start, vector<double> d_end, double T) {
+//  double T = 7.0;
+
+  Trajectory traj;
+  traj.s_coeffs = JMT(s_start, s_end, T);
+  traj.d_coeffs = JMT(d_start, d_end, T);
+  traj.T = T;
+  return traj;
 }
 
 
-// Calculate polynomial value given 'coeffs' and point 'x'
-double poly_calc(vector<double> coeffs, double x, int order = 0) {
-  vector<double> dcoeffs = coeffs;
-  for (int i = 0; i < order; ++i) {
-    dcoeffs = differentiate(dcoeffs);
-  }
-  double total = 0.0;
-  for (int i = 0; i < dcoeffs.size(); ++i) {
-    total += dcoeffs[i] * pow(x, i);
-  }
-  return total;
-}
+
+
+
 
 
 void print_coeffs(std::string s, vector<double> coeffs) {
@@ -302,6 +410,20 @@ void print_coeffs(std::string s, vector<double> coeffs) {
 }
 
 
+// Conver coeffs to string reprepsentation
+string str_coeffs(vector<double> coeffs) {
+  ostringstream oss;
+  if (coeffs.empty()) return "[]";
+  oss << "[";
+  for (int i = 0; i < coeffs.size() - 1; ++i) {
+    oss << coeffs[i] << ", ";
+  }
+  oss << coeffs[coeffs.size() - 1] << "]";
+  return oss.str();
+
+}
+
+
 void print_vals(vector<double> X, vector<double> Y, int max_num = 10) {
   int m = min(max_num, (int)X.size());
   for (int i = 0; i < m; ++i) {
@@ -312,6 +434,39 @@ void print_vals(vector<double> X, vector<double> Y, int max_num = 10) {
   }
 }
 
+
+vector<double> getTT(double timestep, int num) {
+  vector<double> TT;
+  for (int i = 0; i < num; ++i) {
+    TT.push_back(i * timestep);
+  }
+  return TT;
+}
+
+
+double findTimeInTrajByXY(Trajectory traj, double car_x, double car_y, vector<double> maps_s, vector<double> maps_x, vector<double> maps_y) {
+
+  auto traj_data = getSDbyTraj(traj, TRAJ_TIMESTEP);
+  auto xy = getXYPath(traj_data[0], traj_data[1], TRAJ_TIMESTEP, maps_s, maps_x, maps_y);
+
+  cout << "findTime: xy = " << endl;
+//  print_vals(xy[0], xy[1]);
+
+
+  double min_d = 100000; // big number
+  int min_i = 0;
+  for (int i = 0; i < xy[0].size(); ++i) {
+    double d = distance(car_x, car_y, xy[0][i], xy[1][i]);
+    if (d < min_d) {
+      min_i = i;
+      min_d = d;
+//      cout << "min [" << i << "] = " << xy[0][i] << ", " << xy[1][i] << " -> " << d << endl;
+      // TODO: Could be optimized to cut earlier
+    }
+  }
+  return min_i * PATH_TIMESTEP;
+
+}
 
 
 #endif //PATH_PLANNING_HELPERS_H_H

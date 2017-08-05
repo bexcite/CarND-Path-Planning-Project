@@ -29,44 +29,6 @@ using json = nlohmann::json;
 namespace chrono = std::chrono;
 
 
-/* ==== HandlerState ==== */
-class HandlerState {
-public:
-
-  HandlerState() {
-    prev_clk = chrono::high_resolution_clock::now();
-    initialized = false;
-  }
-
-  virtual ~HandlerState() {}
-
-  chrono::time_point<chrono::high_resolution_clock> prev_clk;
-
-  bool initialized = false;
-
-  bool ready = false;
-
-  bool path = false;
-
-  double dt;
-
-  void tick() {
-
-    // Calc dt time
-    auto clk = chrono::high_resolution_clock::now();
-    dt = chrono::duration<double>(clk - prev_clk).count();
-    prev_clk = clk;
-
-    if (initialized && !ready) {
-      ready = true;
-    }
-    if (!initialized) {
-      initialized = true;
-    }
-  }
-
-};
-
 
 // Still
 std::string TEST_JSON_1 = "{\"d\":6.164833,\"end_path_d\":0,\"end_path_s\":0,\"previous_path_x\":[],\"previous_path_y\":[],\"s\":124.8336,\"sensor_fusion\":[[0,870.4026,1132.156,19.77468,0.8812704,85.81837,2.667445],[1,976.1345,1138.357,20.86601,4.658673,191.4412,2.503582],[2,978.3932,1130.807,21.25309,4.735238,191.9534,10.36771],[3,1070.347,1165.639,9.830731,4.096075,288.7551,9.991341],[4,919.1696,1132.875,18.96036,0.1730665,134.5592,2.044153],[5,940.7293,1125.507,19.29597,1.361223,155.0642,10.1185],[6,1054.151,1158.943,2.57131,1.055055,271.3134,9.958789],[7,1097.656,1174.81,11.86194,2.911226,319.1452,9.65999],[8,900.5734,1124.793,19.82975,0.01605316,115.9831,10.00751],[9,874.2359,1128.839,19.28486,-0.08530154,89.6629,5.971819],[10,1047.916,1156.4,0.4504717,0.1831465,264.5796,9.95699],[11,1101.201,1184.121,15.72835,2.854728,324.8331,1.480479]],\"speed\":0,\"x\":909.48,\"y\":1128.67,\"yaw\":0}";
@@ -157,16 +119,30 @@ int main() {
           auto sensor_fusion = j[1]["sensor_fusion"];
 
 
+
+
           json msgJson;
 
           vector<double> next_x_vals;
           vector<double> next_y_vals;
 
+          cout << "--------------------------" << endl;
+
           // Tick for dt and other params
           hState.tick();
 
+          // Speed in m/s
+          double car_speed_m = 1609.344 * car_speed / 3600.0;
+
+
+
+
+
+
           // Check do we have all info
           if (!hState.ready) {
+            hState.prev_v = car_speed_m;
+
             // Send empty
             cout << "Not READY yet!" << endl;
             msgJson["next_x"] = next_x_vals;
@@ -176,8 +152,9 @@ int main() {
             return;
           }
 
-          // Speed in m/s
-          double car_speed_m = 1609.344 * car_speed / 3600.0;
+          hState.acc = (car_speed_m - hState.prev_v) / hState.dt;
+          hState.prev_v = car_speed_m;
+
 
           // We are ready with DT
           cout << "DT = " << hState.dt << endl;
@@ -186,6 +163,8 @@ int main() {
           cout << "s,d = " << car_s << ", " << car_d << endl;
           cout << "end_path s,d = " << end_path_s << ", " << end_path_d << endl;
           cout << "prev_path.size = " << previous_path_x.size() << endl;
+          cout << "acc = " << hState.acc << endl;
+
 
           // Make a straight line trajectory
           vector<double> s_start = {car_s, car_speed, 0};
@@ -196,31 +175,37 @@ int main() {
 
           double T = 8.0;
 
-          auto s_coeffs = JMT(s_start, s_end, T);
-          auto d_coeffs = JMT(d_start, d_end, T);
+          Trajectory traj = getJMT(s_start, s_end, d_start, d_end, T);
 
+//          auto s_coeffs = JMT(s_start, s_end, T);
+//          auto d_coeffs = JMT(d_start, d_end, T);
+
+          /*
           double timestep = TRAJ_TIMESTEP;
           double t = 0.0;
           vector<double> SS;
           vector<double> DD;
           vector<double> TT;
           while (t <= T+timestep) {
-            double sx = poly_calc(s_coeffs, t);
-            double dx = poly_calc(d_coeffs, t);
+            double sx = poly_calc(traj.s_coeffs, t);
+            double dx = poly_calc(traj.d_coeffs, t);
             SS.push_back(sx);
             DD.push_back(dx);
             TT.push_back(t);
             t += timestep;
           }
+           */
+
+          auto traj_data = getSDbyTraj(traj, TRAJ_TIMESTEP * 2); // s,d,t
 
 
           // Transform from s,d to x,y
           if (!hState.path) {
             cout << "path = ";
 
-            vector< vector<double> > xy;
 
-            xy = getXYPath(SS, DD, TRAJ_TIMESTEP, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+
+            auto xy = getXYPath(traj_data[0], traj_data[1], TRAJ_TIMESTEP * 2, map_waypoints_s, map_waypoints_x, map_waypoints_y);
 
             next_x_vals = xy[0];
             next_y_vals = xy[1];
@@ -228,12 +213,35 @@ int main() {
             print_vals(next_x_vals, next_y_vals);
 
             hState.path = true;
+            hState.prev_traj = traj;
           } else {
 
+            // Analyze prev traj
+            double curr_time;
+            curr_time = findTimeInTrajByXY(hState.prev_traj, car_x, car_y, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+            cout << "found curr_time = " << curr_time << endl;
+
+            // Look at s,d params at the curr_time
+            double curr_s, curr_s_v, curr_s_a;
+            double curr_d, curr_d_v, curr_d_a;
+            curr_s = poly_calc(traj.s_coeffs, curr_time, 0);
+            curr_s_v = poly_calc(traj.s_coeffs, curr_time, 1);
+            curr_s_a = poly_calc(traj.s_coeffs, curr_time, 2);
+            print_coeffs("curr_s = ", {curr_s, curr_s_v, curr_s_a});
+
+            curr_d = poly_calc(traj.d_coeffs, curr_time, 0);
+            curr_d_v = poly_calc(traj.d_coeffs, curr_time, 1);
+            curr_d_a = poly_calc(traj.d_coeffs, curr_time, 2);
+            print_coeffs("curr_d = ", {curr_d, curr_d_v, curr_d_a});
+
+            /*
             vector<double> prevTT;
             for (int i = 0; i < previous_path_x.size(); ++i) {
               prevTT.push_back(i * PATH_TIMESTEP);
             }
+             */
+            vector<double> prevTT;
+            prevTT = getTT(PATH_TIMESTEP, previous_path_x.size());
 
             // Spline Smoothing XY line
             tk::spline splPrevX;
@@ -254,7 +262,7 @@ int main() {
               next_y_vals.push_back(previous_path_y[i]);
             }
 
-            print_vals(next_x_vals, next_y_vals);
+//            print_vals(next_x_vals, next_y_vals);
 
 
           }
