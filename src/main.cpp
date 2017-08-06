@@ -77,6 +77,7 @@ int main() {
 
 
 
+
   h.onMessage([&hState,&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy](uWS::WebSocket<uWS::SERVER> *ws, char *data, size_t length,
                      uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
@@ -126,7 +127,7 @@ int main() {
           vector<double> next_x_vals;
           vector<double> next_y_vals;
 
-          cout << "--------------------------" << endl;
+          cout << "----- " << hState.cnt << " ------------------" << endl;
 
           // Tick for dt and other params
           hState.tick();
@@ -135,7 +136,7 @@ int main() {
           double car_speed_m = 1609.344 * car_speed / 3600.0;
 
 
-
+          hState.save(car_x, car_y, car_yaw, car_s, car_d);
 
 
 
@@ -166,38 +167,142 @@ int main() {
           cout << "acc = " << hState.acc << endl;
 
 
-          // Make a straight line trajectory
-          vector<double> s_start = {car_s, car_speed, 0};
-          vector<double> s_end = {car_s+100, 20, 0};
+          // Get start_s and start_d params
+            // Check prev_path
+            // Check prev_traj
+
+          vector<double> s_start = {car_s, car_speed_m, 0};
+          vector<double> s_end;
 
           vector<double> d_start = {car_d, 0, 0};
-          vector<double> d_end = {car_d, 0, 0};
+          vector<double> d_end;
 
-          double T = 8.0;
+          if (hState.path) {
+            double curr_time;
+            curr_time = findTimeInTrajByXY(hState.prev_traj, car_x, car_y, car_yaw, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+            cout << "found curr_time = " << curr_time << endl;
+
+            // Look at s,d params at the curr_time
+            double curr_s, curr_s_v, curr_s_a;
+            double curr_d, curr_d_v, curr_d_a;
+            curr_s = poly_calc(hState.prev_traj.s_coeffs, curr_time, 0);
+            curr_s_v = poly_calc(hState.prev_traj.s_coeffs, curr_time, 1);
+            curr_s_a = poly_calc(hState.prev_traj.s_coeffs, curr_time, 2);
+            print_coeffs("curr_s = ", {curr_s, curr_s_v, curr_s_a});
+
+            curr_d = poly_calc(hState.prev_traj.d_coeffs, curr_time, 0);
+            curr_d_v = poly_calc(hState.prev_traj.d_coeffs, curr_time, 1);
+            curr_d_a = poly_calc(hState.prev_traj.d_coeffs, curr_time, 2);
+            print_coeffs("curr_d = ", {curr_d, curr_d_v, curr_d_a});
+
+            s_start[1] = curr_s_v;
+            s_start[2] = curr_s_a;
+
+            d_start[1] = curr_d_v;
+            d_start[2] = curr_d_a;
+          }
+
+
+          print_coeffs("FINAL s_start = ", s_start);
+          print_coeffs("FINAL d_start = ", d_start);
+
+
+          // Make a straight line trajectory
+//          s_start = {car_s, car_speed, 0};
+          s_end = {s_start[0] + 100, 15, 0};
+
+//          d_start = {car_d, 0, 0};
+          d_end = {6.0, 0, 0};
+
+
+
+//          double T = 8.0;
+
+          double s_avg_v = (s_start[1] + s_end[1]) / 2;
+          double T = (s_end[0] - s_start[0]) / s_avg_v;
+          T = 8.0;
+
+
+
 
           Trajectory traj = getJMT(s_start, s_end, d_start, d_end, T);
 
-//          auto s_coeffs = JMT(s_start, s_end, T);
-//          auto d_coeffs = JMT(d_start, d_end, T);
+          auto acc_stats = traj_stats_acc(traj);
+          cout << "acc_per_sec = " << acc_stats[0] << ", max_acc = " << acc_stats[1] << endl;
+
+//          cout << "TRAJ: " << traj.str() << endl;
+
+
+//          auto traj_data = getSDbyTraj(traj, TRAJ_TIMESTEP * 2); // s,d,t
+//          auto xy = getXYPath(traj_data[0], traj_data[1], TRAJ_TIMESTEP * 2, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+
+          auto xy = getXYPathFromTraj(traj, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+
+          json x_j = json(xy[0]);
+          json y_j = json(xy[1]);
+
+//          cout << "x_path = " << x_j << endl;
+//          cout << "y_path = " << y_j << endl;
+//          cout << "prev_x = " << previous_path_x << endl;
+//          cout << "prev_y = " << previous_path_y << endl;
+
+          add_to_log(hState.dt, car_x, car_y, car_yaw, car_s, car_d, car_speed_m, traj);
+
+
+          next_x_vals = xy[0];
+          next_y_vals = xy[1];
 
           /*
-          double timestep = TRAJ_TIMESTEP;
-          double t = 0.0;
-          vector<double> SS;
-          vector<double> DD;
-          vector<double> TT;
-          while (t <= T+timestep) {
-            double sx = poly_calc(traj.s_coeffs, t);
-            double dx = poly_calc(traj.d_coeffs, t);
-            SS.push_back(sx);
-            DD.push_back(dx);
-            TT.push_back(t);
-            t += timestep;
+          if (previous_path_x.size() > 10) {
+
+
+
+            // Reconstruct previous path spline
+            vector<double> prevTT;
+            prevTT = getTT(PATH_TIMESTEP, previous_path_x.size());
+
+            // Spline Smoothing XY line
+            tk::spline splPrevX;
+            splPrevX.set_points(prevTT, previous_path_x);
+
+            tk::spline splPrevY;
+            splPrevY.set_points(prevTT, previous_path_y);
+
+            // Combine new path with previous_path
+            auto N = xy[0].size();
+            auto prev_N = previous_path_x.size();
+//            if (prev_N > 10) prev_N = 10;
+            if (prev_N > N) prev_N = N;
+            cout << "mix with prev: prev_N = " << prev_N << ", N = " << N << endl;
+            for (int i = 0; i < N; i++) {
+              if (i < prev_N) {
+                // mix
+//                double prev_ratio = 1 - i / prev_N;
+                double prev_ratio = 1;
+                next_x_vals.push_back(prev_ratio * splPrevX(i * PATH_TIMESTEP) + (1 - prev_ratio) * xy[0][i]);
+                next_y_vals.push_back(prev_ratio * splPrevY(i * PATH_TIMESTEP) + (1 - prev_ratio) * xy[1][i]);
+              } else {
+                // put as is
+                next_x_vals.push_back(xy[0][i]);
+                next_y_vals.push_back(xy[1][i]);
+              }
+
+            }
+          } else {
+            cout << "no previous path so no mixing" << endl;
+            // Just set up new path to next_vals
+            next_x_vals = xy[0];
+            next_y_vals = xy[1];
           }
            */
 
-          auto traj_data = getSDbyTraj(traj, TRAJ_TIMESTEP * 2); // s,d,t
+//          print_vals(next_x_vals, next_y_vals);
 
+          hState.path = true;
+          hState.prev_traj = traj;
+
+
+          /*
 
           // Transform from s,d to x,y
           if (!hState.path) {
@@ -216,30 +321,26 @@ int main() {
             hState.prev_traj = traj;
           } else {
 
-            // Analyze prev traj
+            // Analyze prev traj and found curr_time
             double curr_time;
-            curr_time = findTimeInTrajByXY(hState.prev_traj, car_x, car_y, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+            curr_time = findTimeInTrajByXY(hState.prev_traj, car_x, car_y, car_yaw, map_waypoints_s, map_waypoints_x, map_waypoints_y);
             cout << "found curr_time = " << curr_time << endl;
 
             // Look at s,d params at the curr_time
             double curr_s, curr_s_v, curr_s_a;
             double curr_d, curr_d_v, curr_d_a;
-            curr_s = poly_calc(traj.s_coeffs, curr_time, 0);
-            curr_s_v = poly_calc(traj.s_coeffs, curr_time, 1);
-            curr_s_a = poly_calc(traj.s_coeffs, curr_time, 2);
+            curr_s = poly_calc(hState.prev_traj.s_coeffs, curr_time, 0);
+            curr_s_v = poly_calc(hState.prev_traj.s_coeffs, curr_time, 1);
+            curr_s_a = poly_calc(hState.prev_traj.s_coeffs, curr_time, 2);
             print_coeffs("curr_s = ", {curr_s, curr_s_v, curr_s_a});
 
-            curr_d = poly_calc(traj.d_coeffs, curr_time, 0);
-            curr_d_v = poly_calc(traj.d_coeffs, curr_time, 1);
-            curr_d_a = poly_calc(traj.d_coeffs, curr_time, 2);
+            curr_d = poly_calc(hState.prev_traj.d_coeffs, curr_time, 0);
+            curr_d_v = poly_calc(hState.prev_traj.d_coeffs, curr_time, 1);
+            curr_d_a = poly_calc(hState.prev_traj.d_coeffs, curr_time, 2);
             print_coeffs("curr_d = ", {curr_d, curr_d_v, curr_d_a});
 
-            /*
-            vector<double> prevTT;
-            for (int i = 0; i < previous_path_x.size(); ++i) {
-              prevTT.push_back(i * PATH_TIMESTEP);
-            }
-             */
+
+
             vector<double> prevTT;
             prevTT = getTT(PATH_TIMESTEP, previous_path_x.size());
 
@@ -266,6 +367,8 @@ int main() {
 
 
           }
+
+          */
 
           if (!next_x_vals.empty()) {
             cout << "next_vals.size = " << next_x_vals.size() << " from {"
@@ -398,8 +501,11 @@ int main() {
 
   if (LOCAL) {
     // Test on local data
-    testLocal(TEST_JSON_1, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+//    testLocal(TEST_JSON_1, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+    testLocalStored(map_waypoints_s, map_waypoints_x, map_waypoints_y);
   } else {
+    prepare_log();
+
     int port = 4567;
     if (h.listen(port)) {
       std::cout << "Listening to port " << port << std::endl;

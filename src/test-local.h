@@ -22,6 +22,7 @@
 #include "spline.h"
 #include "helpers.h"
 #include "constants.h"
+#include "helpers_plot.h"
 
 
 using namespace std;
@@ -30,8 +31,101 @@ using namespace std;
 // for convenience
 using json = nlohmann::json;
 
-
 namespace plt = matplotlibcpp;
+
+
+void testLocalStored(vector<double> maps_s, vector<double> maps_x, vector<double> maps_y) {
+
+  cout << endl << ">>> TESTING on STATIC DATA !!!!! [stored]" << endl << endl;
+
+  json j = read_log();
+
+  cout << "read from logFile " << j.size() << " lines" << endl;
+
+
+  int start = 0; //154
+  int end = 140; //j.size();
+
+  bool plot_first = false;
+  int plot_first_cnt = 0;
+  int plot_first_max = 1;
+
+  double t = 0;
+
+  vector<double> XX;
+  vector<double> YY;
+  vector<double> TT;
+
+  vector<double> SS;
+  vector<double> DD;
+
+  for (int i = start; i < end; ++i) {
+
+    double car_x = j[i]["car_x"];
+    double car_y = j[i]["car_y"];
+    double car_yaw = deg2rad(j[i]["car_yaw"]);
+    double car_s = j[i]["car_s"];
+    double car_d = j[i]["car_d"];
+    double dt = j[i]["dt"];
+    double car_speed = j[i]["car_speed"];
+    Trajectory car_traj;
+    car_traj.s_coeffs = json_read_vector(j[i]["s_coeffs"]);
+    car_traj.d_coeffs = json_read_vector(j[i]["d_coeffs"]);
+    car_traj.T = j[i]["traj_t"];
+
+    if (i > 0) {
+      XX.push_back(car_x);
+      YY.push_back(car_y);
+      SS.push_back(car_s);
+      DD.push_back(car_d);
+      t += dt;
+      TT.push_back(t);
+    }
+
+    if (plot_first && plot_first_cnt < plot_first_max) {
+      plot_traj(car_traj);
+      ++plot_first_cnt;
+      if (plot_first_cnt == plot_first_max) plot_first = false;
+    }
+
+    auto xy = getXYPathFromTraj(car_traj, maps_s, maps_x, maps_y);
+
+//    cout << "car x,y = " << car_x << ", " << car_y << endl;
+//    cout << "traj = " << car_traj.str() << endl;
+
+    auto acc_stats = traj_stats_acc(car_traj);
+    cout << "acc_per_sec = " << acc_stats[0] << ", max_acc = " << acc_stats[1] << endl;
+
+    /*
+    double car_l = car_speed * 0.02;
+    plt::plot({car_x, car_x + car_l * cos(car_yaw)}, {car_y, car_y + car_l * sin(car_yaw)}, "r-");
+    plt::plot({car_x}, {car_y}, "ro");
+
+    plt::plot(xy[0], xy[1], "b-");
+
+    plt::annotate(to_string(i), car_x, car_y);
+    */
+
+  }
+
+//  plt::show();
+
+  plt::subplot(4, 1, 1);
+  plt::plot(TT, XX, "bo");
+  plt::subplot(4, 1, 2);
+  plt::plot(TT, YY, "bo");
+  plt::subplot(4, 1, 3);
+  plt::plot(TT, SS, "bo");
+  plt::subplot(4, 1, 4);
+  plt::plot(TT, DD, "bo");
+  plt::show();
+
+
+
+  cout << endl <<  "<<<< END STATIC TEST!!! [stored]" << endl << endl;
+
+}
+
 
 // Test on local data
 void testLocal(std::string s, vector<double> maps_s, vector<double> maps_x, vector<double> maps_y) {
@@ -263,7 +357,7 @@ void testLocal(std::string s, vector<double> maps_s, vector<double> maps_x, vect
   // Annotate traj
   for (int i = 0; i < TT.size(); i += int(1.0/timestep)) {
     ostringstream oss;
-    oss << " " << i; // TT[i]
+    oss << " " << TT[i];
     plt::annotate(oss.str(), SS[i], DD[i] + 0.2);
   }
 

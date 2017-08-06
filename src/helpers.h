@@ -10,6 +10,7 @@
 #include <math.h>
 #include <chrono>
 #include <iostream>
+#include <fstream>
 //#include <thread>
 #include <vector>
 #include "Eigen-3.3/Eigen/Core"
@@ -23,6 +24,10 @@
 #include "constants.h"
 
 using namespace std;
+
+// for convenience
+using json = nlohmann::json;
+
 
 
 /* ==== Some Forward Definitions =========== */
@@ -51,12 +56,14 @@ public:
 
   HandlerState() {
     prev_clk = chrono::high_resolution_clock::now();
+    start_clk = chrono::high_resolution_clock::now();
     initialized = false;
   }
 
   virtual ~HandlerState() {}
 
   chrono::time_point<chrono::high_resolution_clock> prev_clk;
+  chrono::time_point<chrono::high_resolution_clock> start_clk;
 
   bool initialized = false;
 
@@ -65,26 +72,54 @@ public:
   bool path = false;
 
   double dt;
+  double t;
 
   double prev_v;
 
   double acc;
 
+  unsigned int cnt = 0;
+
   Trajectory prev_traj;
+
+  vector<double> vec_car_x;
+  vector<double> vec_car_y;
+  vector<double> vec_car_yaw;
+  vector<double> vec_car_s;
+  vector<double> vec_car_d;
+  vector<double> vec_t;
 
   void tick() {
 
     // Calc dt time
     auto clk = chrono::high_resolution_clock::now();
     dt = chrono::duration<double>(clk - prev_clk).count();
+    t = chrono::duration<double>(clk - start_clk).count();
     prev_clk = clk;
+
+
 
     if (initialized && !ready) {
       ready = true;
     }
     if (!initialized) {
       initialized = true;
+      start_clk = clk;
     }
+
+    cnt++;
+  }
+
+  void save(double car_x, double car_y, double car_yaw, double car_s, double car_d) {
+    if (ready) {
+      vec_car_x.push_back(car_x);
+      vec_car_y.push_back(car_y);
+      vec_car_yaw.push_back(car_yaw);
+      vec_car_s.push_back(car_s);
+      vec_car_d.push_back(car_d);
+      vec_t.push_back(t);
+    }
+
   }
 
 };
@@ -312,6 +347,8 @@ vector<vector<double> > getXYPath(vector<double> ss, vector<double> dd, double t
 }
 
 
+
+
 // Differentiate
 vector<double> differentiate(vector<double> coeffs) {
   vector<double> dcoeffs;
@@ -444,29 +481,129 @@ vector<double> getTT(double timestep, int num) {
 }
 
 
-double findTimeInTrajByXY(Trajectory traj, double car_x, double car_y, vector<double> maps_s, vector<double> maps_x, vector<double> maps_y) {
+double findTimeInTrajByXY(Trajectory traj, double car_x, double car_y, double car_yaw, vector<double> maps_s, vector<double> maps_x, vector<double> maps_y) {
 
   auto traj_data = getSDbyTraj(traj, TRAJ_TIMESTEP);
   auto xy = getXYPath(traj_data[0], traj_data[1], TRAJ_TIMESTEP, maps_s, maps_x, maps_y);
 
-  cout << "findTime: xy = " << endl;
+//  cout << "findTime: xy = " << endl;
 //  print_vals(xy[0], xy[1]);
 
 
-  double min_d = 100000; // big number
-  int min_i = 0;
-  for (int i = 0; i < xy[0].size(); ++i) {
-    double d = distance(car_x, car_y, xy[0][i], xy[1][i]);
-    if (d < min_d) {
-      min_i = i;
-      min_d = d;
-//      cout << "min [" << i << "] = " << xy[0][i] << ", " << xy[1][i] << " -> " << d << endl;
-      // TODO: Could be optimized to cut earlier
-    }
-  }
-  return min_i * PATH_TIMESTEP;
+//  int min_i = ClosestWaypoint(car_x, car_y, xy[0], xy[1]);
+  int min_i = NextWaypoint(car_x, car_y, car_yaw, xy[0], xy[1]);
+  if (min_i == 0) return 0.0;
+
+  double t = (min_i - 1) * PATH_TIMESTEP;
+
+  double Dxy = distance(xy[0][min_i-1], xy[1][min_i-1], xy[0][min_i], xy[1][min_i]);
+  double d = distance(xy[0][min_i-1], xy[1][min_i-1], car_x, car_y);
+
+  t += d/Dxy * PATH_TIMESTEP;
+
+  return t;
 
 }
+
+
+vector<vector<double> > getXYPathFromTraj(Trajectory traj, vector<double> maps_s, vector<double> maps_x, vector<double> maps_y) {
+
+  auto traj_data = getSDbyTraj(traj, TRAJ_TIMESTEP * 2); // s,d,t
+  auto xy = getXYPath(traj_data[0], traj_data[1], TRAJ_TIMESTEP * 2, maps_s, maps_x, maps_y);
+  return xy;
+}
+
+
+
+void prepare_log() {
+  ofstream logFile ("log.out", ios::out);
+  if (logFile.is_open()) {
+    //logFile << "--- start ----" << endl;
+    logFile.close();
+  }
+}
+
+
+
+void add_to_log(double dt, double car_x, double car_y, double car_yaw, double car_s, double car_d, double car_speed, Trajectory traj) {
+  ofstream logFile ("log.out", ios::out | ios::app);
+  if (logFile.is_open()) {
+    json j;
+    j["dt"] = dt;
+    j["car_x"] = car_x;
+    j["car_y"] = car_y;
+    j["car_yaw"] = car_yaw;
+    j["car_s"] = car_s;
+    j["car_d"] = car_d;
+    j["car_speed"] = car_speed; // m/s
+    j["s_coeffs"] = traj.s_coeffs;
+    j["d_coeffs"] = traj.d_coeffs;
+    j["traj_t"] = traj.T;
+    logFile << j << endl;
+    logFile.close();
+  } else {
+    cout << "ERROR opening file!!!" << endl;
+  }
+
+}
+
+
+vector<json> read_log() {
+  cout << "read log" << endl;
+  string line;
+  ifstream logFile("log.out", ifstream::in);
+  vector<json> j;
+  cout << "read log 1" << endl;
+  if (logFile.is_open()) {
+
+    while (getline(logFile, line)) {
+      auto jline = json::parse(line);
+      j.push_back(jline);
+    }
+
+    logFile.close();
+
+  } else {
+    cout << "Unable to open logFile" << endl;
+  }
+  return j;
+}
+
+
+vector<double> json_read_vector(json j) {
+  vector<double> r;
+  for (int i = 0; i < j.size(); ++i) {
+    r.push_back(j[i]);
+  }
+  return r;
+}
+
+
+vector<double> traj_stats_acc(Trajectory traj) {
+  auto traj_data = getSDbyTraj(traj, PATH_TIMESTEP);
+  vector<double> SS = traj_data[0];
+  vector<double> DD = traj_data[1];
+  vector<double> TT = traj_data[2];
+
+  vector<double> s_coeffs_v = differentiate(traj.s_coeffs);
+  vector<double> s_coeffs_a = differentiate(s_coeffs_v);
+
+  double max_acc = 0;
+  double total_acc = 0;
+  for (int i = 0; i < TT.size(); ++i) {
+    double a = poly_calc(s_coeffs_a, TT[i]);
+    if (a > max_acc) {
+      max_acc = a;
+    }
+    total_acc += abs(a * PATH_TIMESTEP);
+  }
+  double acc_per_second = total_acc / traj.T;
+
+  return {acc_per_second, max_acc};
+
+
+}
+
 
 
 #endif //PATH_PLANNING_HELPERS_H_H
