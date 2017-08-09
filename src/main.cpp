@@ -180,6 +180,7 @@ int main() {
 
           int forwardN = 0;
 
+          double curr_time;
 
           if (hState.path) {
 
@@ -192,7 +193,6 @@ int main() {
             double forward_y = previous_path_y[forwardN];
 
 
-            double curr_time;
             curr_time = findTimeInTrajByXY(hState.prev_traj, car_x, car_y, car_yaw, map_waypoints_s, map_waypoints_x, map_waypoints_y);
             cout << "found curr_time = " << curr_time << endl;
 
@@ -202,6 +202,7 @@ int main() {
 
             // for testing - TODO: fix names
             curr_time = forward_time;
+            cout << "Curr Time == Forward Time" << endl;
 
             // Look at s,d params at the curr_time
             double curr_s, curr_s_v, curr_s_a;
@@ -227,8 +228,8 @@ int main() {
             d_start[2] = curr_d_a;
           }
 
-          cout << "s_start[0] = " << s_start[0] << endl;
-          cout << "d_start[0] = " << d_start[0] << endl;
+//          cout << "s_start[0] = " << s_start[0] << endl;
+//          cout << "d_start[0] = " << d_start[0] << endl;
 
 
           print_coeffs("FINAL s_start = ", s_start);
@@ -251,6 +252,18 @@ int main() {
           T = 8.0;
 
 
+          // Mimic prev trajectory
+          if (hState.path) {
+            double last_t = hState.prev_traj.T;
+            s_end[0] = poly_calc(hState.prev_traj.s_coeffs, last_t);
+            d_end[0] = poly_calc(hState.prev_traj.d_coeffs, last_t);
+            T = hState.prev_traj.T - curr_time;
+          }
+
+
+          print_coeffs("FINAL s_end = ", s_end);
+          print_coeffs("FINAL d_end = ", d_end);
+          cout << "FINAL T = " << T << endl;
 
 
           Trajectory traj = getJMT(s_start, s_end, d_start, d_end, T);
@@ -262,12 +275,32 @@ int main() {
 //          cout << "TRAJ: " << traj.str() << endl;
 
 
-          add_to_log(hState.dt, car_x, car_y, car_yaw, car_s, car_d, car_speed_m, traj, previous_path_x, previous_path_y);
+
 
 
           vector<vector<double>> xy;
 
+          if (hState.path) {
+            xy = getXYPathFromTraj(hState.prev_traj, map_waypoints_s, map_waypoints_x, map_waypoints_y, curr_time);
 
+            add_to_log(hState.dt, car_x, car_y, car_yaw, car_s, car_d, car_speed_m, hState.prev_traj, previous_path_x, previous_path_y);
+
+          } else {
+            xy = getXYPathFromTraj(traj, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+
+            add_to_log(hState.dt, car_x, car_y, car_yaw, car_s, car_d, car_speed_m, traj, previous_path_x, previous_path_y);
+
+            hState.path = true;
+            hState.prev_traj = traj;
+
+          }
+
+          next_x_vals = xy[0];
+          next_y_vals = xy[1];
+
+
+
+          /* Commented forwardN logic
           if (forwardN > 0) {
 
             auto traj_data = getSDbyTraj(traj, TRAJ_TIMESTEP); // s,d,t
@@ -287,13 +320,13 @@ int main() {
             yy_n.push_back(previous_path_y[0]);
 
             // Add first forwardN steps of previous_path
-            /*
-            for (int i = forwardN; i > 0; --i) {
-              tt_n.push_back(- PATH_TIMESTEP * i);
-              xx_n.push_back(previous_path_x[forwardN - i]);
-              yy_n.push_back(previous_path_y[forwardN - i]);
-            }
-             */
+
+//            for (int i = forwardN; i > 0; --i) {
+//              tt_n.push_back(- PATH_TIMESTEP * i);
+//              xx_n.push_back(previous_path_x[forwardN - i]);
+//              yy_n.push_back(previous_path_y[forwardN - i]);
+//            }
+
 
             // Add points from new traj
             for (int i = 0; i < traj_data[0].size(); ++i) {
@@ -363,10 +396,10 @@ int main() {
             cout << "no mix up";
             print_vals(next_x_vals, next_y_vals, 15);
           }
+          */
 
 
-          hState.path = true;
-          hState.prev_traj = traj;
+
 
 
           /*

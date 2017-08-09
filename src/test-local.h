@@ -45,7 +45,7 @@ void testLocalStored(vector<double> maps_s, vector<double> maps_x, vector<double
 
 
   unsigned long start = 66; //154
-  unsigned long end = start + 2; //j.size();
+  unsigned long end = start + 5; //j.size();
 
   bool plot_first = false;
   int plot_first_cnt = 0;
@@ -102,7 +102,7 @@ void testLocalStored(vector<double> maps_s, vector<double> maps_x, vector<double
     cout << "acc_per_sec = " << acc_stats[0] << ", max_acc = " << acc_stats[1] << endl;
 
 
-    double car_l = car_speed * 0.02;
+    double car_l = car_speed * 0.05;
     plt::plot({car_x, car_x + car_l * cos(car_yaw)}, {car_y, car_y + car_l * sin(car_yaw)}, "r-");
     plt::plot({car_x}, {car_y}, "ro");
 
@@ -114,7 +114,7 @@ void testLocalStored(vector<double> maps_s, vector<double> maps_x, vector<double
 
 
     // ============ Combine paths ==========================
-
+    /*
     int forwardN = 0;
 
 
@@ -136,13 +136,13 @@ void testLocalStored(vector<double> maps_s, vector<double> maps_x, vector<double
     }
 
     // Add first forwardN steps of previous_path
-    /*
-    for (int i = forwardN; i > 0; --i) {
-      tt_n.push_back(- PATH_TIMESTEP * i);
-      xx_n.push_back(previous_path_x[forwardN - i]);
-      yy_n.push_back(previous_path_y[forwardN - i]);
-    }
-     */
+
+//    for (int i = forwardN; i > 0; --i) {
+//      tt_n.push_back(- PATH_TIMESTEP * i);
+//      xx_n.push_back(previous_path_x[forwardN - i]);
+//      yy_n.push_back(previous_path_y[forwardN - i]);
+//    }
+
 
     // Add points from new traj
     for (int i = 0; i < traj_data[0].size(); ++i) {
@@ -195,7 +195,7 @@ void testLocalStored(vector<double> maps_s, vector<double> maps_x, vector<double
     plt::grid(true);
 
     plt::plot(XX_smooth, YY_smooth, "g+");
-
+    */
 
     // =================================
 

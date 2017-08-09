@@ -502,10 +502,13 @@ double findTimeInTrajByXY(Trajectory traj, double car_x, double car_y, double ca
 
   double t = (min_i - 1) * PATH_TIMESTEP;
 
+  /* not needed due to how simulator works :(
+   * Spend too much time on these timing issues ...
   double Dxy = distance(xy[0][min_i-1], xy[1][min_i-1], xy[0][min_i], xy[1][min_i]);
   double d = distance(xy[0][min_i-1], xy[1][min_i-1], car_x, car_y);
 
   t += d/Dxy * PATH_TIMESTEP;
+   */
 
   return t;
 
@@ -514,11 +517,19 @@ double findTimeInTrajByXY(Trajectory traj, double car_x, double car_y, double ca
 
 vector<vector<double> > getXYPathFromTraj(Trajectory traj, vector<double> maps_s, vector<double> maps_x, vector<double> maps_y, double timeShift = 0.0) {
 
-  auto traj_data = getSDbyTraj(traj, TRAJ_TIMESTEP * 2, timeShift); // s,d,t
+  auto traj_data = getSDbyTraj(traj, TRAJ_TIMESTEP * 2 /*, timeShift*/); // s,d,t
   cout << "traj_data.size = " << traj_data[0].size() << endl;
   cout << "traj_data[0] = " << traj_data[2][0] << ", " << traj_data[2][traj_data[2].size()-1] << endl;
 
   auto xy = getXYPath(traj_data[0], traj_data[1], traj_data[2], maps_s, maps_x, maps_y);
+
+  double t = 0.0;
+  while (t < timeShift) {
+    xy[0].erase(xy[0].begin());
+    xy[1].erase(xy[1].begin());
+    t += PATH_TIMESTEP;
+  }
+
   return xy;
 }
 
