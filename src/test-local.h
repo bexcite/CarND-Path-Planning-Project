@@ -10,6 +10,7 @@
 #include <math.h>
 #include <chrono>
 #include <iostream>
+#include <algorithm>
 //#include <thread>
 #include <vector>
 #include "Eigen-3.3/Eigen/Core"
@@ -43,12 +44,12 @@ void testLocalStored(vector<double> maps_s, vector<double> maps_x, vector<double
   cout << "read from logFile " << j.size() << " lines" << endl;
 
 
-  int start = 0; //154
-  int end = 140; //j.size();
+  unsigned long start = 66; //154
+  unsigned long end = start + 2; //j.size();
 
   bool plot_first = false;
   int plot_first_cnt = 0;
-  int plot_first_max = 1;
+  int plot_first_max = 3;
 
   double t = 0;
 
@@ -59,13 +60,17 @@ void testLocalStored(vector<double> maps_s, vector<double> maps_x, vector<double
   vector<double> SS;
   vector<double> DD;
 
-  for (int i = start; i < end; ++i) {
+  int N = min(end, j.size());
+
+  for (int i = start; i < N; ++i) {
 
     double car_x = j[i]["car_x"];
     double car_y = j[i]["car_y"];
     double car_yaw = deg2rad(j[i]["car_yaw"]);
     double car_s = j[i]["car_s"];
     double car_d = j[i]["car_d"];
+    vector<double> prev_x = j[i]["prev_x"];
+    vector<double> prev_y = j[i]["prev_y"];
     double dt = j[i]["dt"];
     double car_speed = j[i]["car_speed"];
     Trajectory car_traj;
@@ -96,28 +101,127 @@ void testLocalStored(vector<double> maps_s, vector<double> maps_x, vector<double
     auto acc_stats = traj_stats_acc(car_traj);
     cout << "acc_per_sec = " << acc_stats[0] << ", max_acc = " << acc_stats[1] << endl;
 
-    /*
+
     double car_l = car_speed * 0.02;
     plt::plot({car_x, car_x + car_l * cos(car_yaw)}, {car_y, car_y + car_l * sin(car_yaw)}, "r-");
     plt::plot({car_x}, {car_y}, "ro");
 
-    plt::plot(xy[0], xy[1], "b-");
+    // Traj in XY
+    plt::plot(xy[0], xy[1], "bo");
+
+    // Prev points
+    plt::plot(prev_x, prev_y, "ro");
+
+
+    // ============ Combine paths ==========================
+
+    int forwardN = 0;
+
+
+    auto traj_data = getSDbyTraj(car_traj, TRAJ_TIMESTEP); // s,d,t
+//    cout << "traj_data.size = " << traj_data[0].size() << endl;
+//    cout << "traj_data[0] = " << traj_data[2][0] << ", " << traj_data[2][traj_data[2].size()-1] << endl;
+
+    auto xy_traj = getXY(traj_data[0], traj_data[1], maps_s, maps_x, maps_y);
+
+    vector<double> xx_n;
+    vector<double> yy_n;
+    vector<double> tt_n;
+
+    if (forwardN > 0) {
+      // Add one first point
+      tt_n.push_back(-PATH_TIMESTEP * forwardN);
+      xx_n.push_back(prev_x[0]);
+      yy_n.push_back(prev_y[0]);
+    }
+
+    // Add first forwardN steps of previous_path
+    /*
+    for (int i = forwardN; i > 0; --i) {
+      tt_n.push_back(- PATH_TIMESTEP * i);
+      xx_n.push_back(previous_path_x[forwardN - i]);
+      yy_n.push_back(previous_path_y[forwardN - i]);
+    }
+     */
+
+    // Add points from new traj
+    for (int i = 0; i < traj_data[0].size(); ++i) {
+      tt_n.push_back(traj_data[2][i]);
+      xx_n.push_back(xy_traj[0][i]);
+      yy_n.push_back(xy_traj[1][i]);
+    }
+
+    plt::plot(xx_n, yy_n, "yo");
+
+//            next_x_vals = xy[0];
+//            next_y_vals = xy[1];
+
+
+    //double T = ss.size() * timestep;
+    double T = car_traj.T;
+
+//    cout << "xx_n, yy_n" << endl;
+
+//    print_vals(xx_n, yy_n, 100);
+
+
+//  vector<double> TT;
+//  for (int i = 0; i < ss.size(); ++i) {
+//    TT.push_back((double)i * timestep);
+//  }
+
+    // Makine it all to splines
+    tk::spline splX;
+    splX.set_points(tt_n, xx_n);
+
+    tk::spline splY;
+    splY.set_points(tt_n, yy_n);
+
+    vector<double> XX_smooth;
+    vector<double> YY_smooth;
+    vector<double> TT;
+    double t = - PATH_TIMESTEP * forwardN;
+    double timestep2 = PATH_TIMESTEP; // path requirements
+    while (t <= T) {
+      XX_smooth.push_back(splX(t));
+      YY_smooth.push_back(splY(t));
+      TT.push_back(t);
+      t += timestep2;
+    }
+
+
+    plt::ylim(YY_smooth[0]-1, YY_smooth[0]+5);
+    plt::xlim(XX_smooth[0]-2, XX_smooth[0]+20);
+    plt::grid(true);
+
+    plt::plot(XX_smooth, YY_smooth, "g+");
+
+
+    // =================================
+
+
+
 
     plt::annotate(to_string(i), car_x, car_y);
-    */
+
+
+    plt::show();
+
 
   }
 
-//  plt::show();
 
-  plt::subplot(4, 1, 1);
+
+
+
+  plt::subplot(2, 1, 1);
   plt::plot(TT, XX, "bo");
-  plt::subplot(4, 1, 2);
+  plt::subplot(2, 1, 2);
   plt::plot(TT, YY, "bo");
-  plt::subplot(4, 1, 3);
-  plt::plot(TT, SS, "bo");
-  plt::subplot(4, 1, 4);
-  plt::plot(TT, DD, "bo");
+//  plt::subplot(4, 1, 3);
+//  plt::plot(TT, SS, "bo");
+//  plt::subplot(4, 1, 4);
+//  plt::plot(TT, DD, "bo");
   plt::show();
 
 
@@ -269,7 +373,7 @@ void testLocal(std::string s, vector<double> maps_s, vector<double> maps_x, vect
     t += ts;
   }
 
-  auto xy_smooth = getXYPath(SS, DD, TRAJ_TIMESTEP, maps_s, maps_x, maps_y);
+  auto xy_smooth = getXYPath(SS, DD, TT, maps_s, maps_x, maps_y);
   XX_smooth = xy_smooth[0];
   YY_smooth = xy_smooth[1];
 

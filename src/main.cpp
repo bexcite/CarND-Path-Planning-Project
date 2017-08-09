@@ -177,10 +177,31 @@ int main() {
           vector<double> d_start = {car_d, 0, 0};
           vector<double> d_end;
 
+
+          int forwardN = 0;
+
+
           if (hState.path) {
+
+            forwardN = 0;
+
+            if (previous_path_x.size() <= forwardN) {
+              forwardN = previous_path_x.size() - 1;
+            }
+            double forward_x = previous_path_x[forwardN];
+            double forward_y = previous_path_y[forwardN];
+
+
             double curr_time;
             curr_time = findTimeInTrajByXY(hState.prev_traj, car_x, car_y, car_yaw, map_waypoints_s, map_waypoints_x, map_waypoints_y);
             cout << "found curr_time = " << curr_time << endl;
+
+            double forward_time;
+            forward_time = findTimeInTrajByXY(hState.prev_traj, forward_x, forward_y, car_yaw, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+            cout << "found forward_time = " << forward_time << endl;
+
+            // for testing - TODO: fix names
+            curr_time = forward_time;
 
             // Look at s,d params at the curr_time
             double curr_s, curr_s_v, curr_s_a;
@@ -195,12 +216,19 @@ int main() {
             curr_d_a = poly_calc(hState.prev_traj.d_coeffs, curr_time, 2);
             print_coeffs("curr_d = ", {curr_d, curr_d_v, curr_d_a});
 
+            s_start[0] = curr_s;
+
             s_start[1] = curr_s_v;
             s_start[2] = curr_s_a;
+
+            d_start[0] = curr_d;
 
             d_start[1] = curr_d_v;
             d_start[2] = curr_d_a;
           }
+
+          cout << "s_start[0] = " << s_start[0] << endl;
+          cout << "d_start[0] = " << d_start[0] << endl;
 
 
           print_coeffs("FINAL s_start = ", s_start);
@@ -227,30 +255,184 @@ int main() {
 
           Trajectory traj = getJMT(s_start, s_end, d_start, d_end, T);
 
+
           auto acc_stats = traj_stats_acc(traj);
           cout << "acc_per_sec = " << acc_stats[0] << ", max_acc = " << acc_stats[1] << endl;
 
 //          cout << "TRAJ: " << traj.str() << endl;
 
 
-//          auto traj_data = getSDbyTraj(traj, TRAJ_TIMESTEP * 2); // s,d,t
-//          auto xy = getXYPath(traj_data[0], traj_data[1], TRAJ_TIMESTEP * 2, map_waypoints_s, map_waypoints_x, map_waypoints_y);
-
-          auto xy = getXYPathFromTraj(traj, map_waypoints_s, map_waypoints_x, map_waypoints_y);
-
-          json x_j = json(xy[0]);
-          json y_j = json(xy[1]);
-
-//          cout << "x_path = " << x_j << endl;
-//          cout << "y_path = " << y_j << endl;
-//          cout << "prev_x = " << previous_path_x << endl;
-//          cout << "prev_y = " << previous_path_y << endl;
-
-          add_to_log(hState.dt, car_x, car_y, car_yaw, car_s, car_d, car_speed_m, traj);
+          add_to_log(hState.dt, car_x, car_y, car_yaw, car_s, car_d, car_speed_m, traj, previous_path_x, previous_path_y);
 
 
-          next_x_vals = xy[0];
-          next_y_vals = xy[1];
+          vector<vector<double>> xy;
+
+
+          if (forwardN > 0) {
+
+            auto traj_data = getSDbyTraj(traj, TRAJ_TIMESTEP); // s,d,t
+            cout << "traj_data.size = " << traj_data[0].size() << endl;
+            cout << "traj_data[0] = " << traj_data[2][0] << ", " << traj_data[2][traj_data[2].size()-1] << endl;
+
+            auto xy_traj = getXY(traj_data[0], traj_data[1], map_waypoints_s, map_waypoints_x, map_waypoints_y);
+
+            vector<double> xx_n;
+            vector<double> yy_n;
+            vector<double> tt_n;
+
+
+            // Add one first point
+            tt_n.push_back(- PATH_TIMESTEP * forwardN);
+            xx_n.push_back(previous_path_x[0]);
+            yy_n.push_back(previous_path_y[0]);
+
+            // Add first forwardN steps of previous_path
+            /*
+            for (int i = forwardN; i > 0; --i) {
+              tt_n.push_back(- PATH_TIMESTEP * i);
+              xx_n.push_back(previous_path_x[forwardN - i]);
+              yy_n.push_back(previous_path_y[forwardN - i]);
+            }
+             */
+
+            // Add points from new traj
+            for (int i = 0; i < traj_data[0].size(); ++i) {
+              tt_n.push_back(traj_data[2][i]);
+              xx_n.push_back(xy_traj[0][i]);
+              yy_n.push_back(xy_traj[1][i]);
+            }
+
+//            next_x_vals = xy[0];
+//            next_y_vals = xy[1];
+
+
+            //double T = ss.size() * timestep;
+            double T = traj.T;
+
+            cout << "xx_n, yy_n" << endl;
+
+            print_vals(xx_n, yy_n, 100);
+
+
+//  vector<double> TT;
+//  for (int i = 0; i < ss.size(); ++i) {
+//    TT.push_back((double)i * timestep);
+//  }
+
+            // Makine it all to splines
+            tk::spline splX;
+            splX.set_points(tt_n, xx_n);
+
+            tk::spline splY;
+            splY.set_points(tt_n, yy_n);
+
+            vector<double> XX_smooth;
+            vector<double> YY_smooth;
+            vector<double> TT;
+            double t = - PATH_TIMESTEP * forwardN;
+            double timestep2 = PATH_TIMESTEP; // path requirements
+            while (t <= T) {
+              XX_smooth.push_back(splX(t));
+              YY_smooth.push_back(splY(t));
+              TT.push_back(t);
+              t += timestep2;
+            }
+
+            for (int i = 0; i < XX_smooth.size(); ++i) {
+              next_x_vals.push_back(XX_smooth[i]);
+              next_y_vals.push_back(YY_smooth[i]);
+            }
+
+            vector<double> prev_x;
+            vector<double> prev_y;
+            for (int i = 0; i < previous_path_x.size(); ++i) {
+              prev_x.push_back(previous_path_x[i]);
+              prev_y.push_back(previous_path_y[i]);
+            }
+            print_vals(prev_x, prev_y, 15);
+
+            cout << "mix up" << endl;
+            print_vals(next_x_vals, next_y_vals, 15);
+
+
+          } else {
+            xy = getXYPathFromTraj(traj, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+            next_x_vals = xy[0];
+            next_y_vals = xy[1];
+
+            cout << "no mix up";
+            print_vals(next_x_vals, next_y_vals, 15);
+          }
+
+
+          hState.path = true;
+          hState.prev_traj = traj;
+
+
+          /*
+
+          if (hState.path) {
+            // Analyze prev traj and found curr_time
+            double curr_time;
+            curr_time = findTimeInTrajByXY(hState.prev_traj, car_x, car_y, car_yaw, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+            cout << "found curr_time = " << curr_time << endl;
+
+            double f = fmod(curr_time, PATH_TIMESTEP);
+            cout << "f = " << f << endl;
+            cout << "r = " << curr_time - f << endl;
+            double timeShift = PATH_TIMESTEP - f;
+            double timePrev = curr_time - f;
+
+            cout << "timeShift = " << timeShift << endl;
+            cout << "timePrev = " << timePrev << endl;
+
+            auto xy_prev = getXYPathFromTraj(hState.prev_traj, map_waypoints_s, map_waypoints_x, map_waypoints_y, 0.0);
+
+            vector<double> tt = getTT(PATH_TIMESTEP, previous_path_x.size());
+
+            // Spline Smoothing XY line
+            tk::spline splX;
+            splX.set_points(tt, previous_path_x);
+
+            tk::spline splY;
+            splY.set_points(tt, previous_path_y);
+
+
+            cout << "set prev traj ..." << endl;
+
+            unsigned long N = 100;
+            if (previous_path_x.size() > N)
+              N = previous_path_x.size();
+
+            for (int i = 0; i < N; ++i) {
+              next_x_vals.push_back(splX(i * PATH_TIMESTEP));
+              next_y_vals.push_back(splY(i * PATH_TIMESTEP));
+            }
+
+//            next_x_vals = xy_prev[0];
+//            next_y_vals = xy_prev[1];
+
+          } else {
+
+            hState.path = true;
+            hState.prev_traj = traj;
+
+            next_x_vals = xy[0];
+            next_y_vals = xy[1];
+
+//            for (int i = 0; i < xy[0].size(); ++i) {
+//              cout << xy[2][i] << "\t" << xy[0][i] << "\t" << xy[1][i] << endl;
+//            }
+          }
+           */
+
+//          json x_j = json(xy[0]);
+//          json y_j = json(xy[1]);
+
+
+
+
+
 
           /*
           if (previous_path_x.size() > 10) {
@@ -298,8 +480,7 @@ int main() {
 
 //          print_vals(next_x_vals, next_y_vals);
 
-          hState.path = true;
-          hState.prev_traj = traj;
+
 
 
           /*

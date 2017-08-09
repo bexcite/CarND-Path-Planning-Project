@@ -310,7 +310,7 @@ vector<vector<double> > getXY(vector<double> ss, vector<double> dd, vector<doubl
 }
 
 
-vector<vector<double> > getXYPath(vector<double> ss, vector<double> dd, double timestep, vector<double> maps_s, vector<double> maps_x, vector<double> maps_y) {
+vector<vector<double> > getXYPath(vector<double> ss, vector<double> dd, vector<double> tt, vector<double> maps_s, vector<double> maps_x, vector<double> maps_y) {
 
   auto xy = getXY(ss, dd, maps_s, maps_x, maps_y);
 
@@ -318,31 +318,37 @@ vector<vector<double> > getXYPath(vector<double> ss, vector<double> dd, double t
 //            next_y_vals = xy[1];
 
 
-  double T = ss.size() * timestep;
+  //double T = ss.size() * timestep;
+  double T = tt[tt.size() - 1];
 
-  vector<double> TT;
-  for (int i = 0; i < ss.size(); ++i) {
-    TT.push_back((double)i * timestep);
-  }
+
+//  vector<double> TT;
+//  for (int i = 0; i < ss.size(); ++i) {
+//    TT.push_back((double)i * timestep);
+//  }
 
   // Spline Smoothing XY line
   tk::spline splX;
-  splX.set_points(TT, xy[0]);
+  splX.set_points(tt, xy[0]);
 
   tk::spline splY;
-  splY.set_points(TT, xy[1]);
+  splY.set_points(tt, xy[1]);
 
   vector<double> XX_smooth;
   vector<double> YY_smooth;
-  double t = 0.0;
-  double timestep2 = 0.02; // path requirements
+  vector<double> TT;
+  double t = tt[0];
+  double timestep2 = PATH_TIMESTEP; // path requirements
   while (t <= T) {
     XX_smooth.push_back(splX(t));
     YY_smooth.push_back(splY(t));
+    TT.push_back(t);
     t += timestep2;
   }
 
-  return {XX_smooth, YY_smooth};
+  cout << "smooth_TT[0] = " << TT[0] << ", smooth_TT[end] = " << TT[TT.size()-1] << endl;
+
+  return {XX_smooth, YY_smooth, TT};
 
 }
 
@@ -375,15 +381,15 @@ double poly_calc(vector<double> coeffs, double x, int order = 0) {
 
 
 
-vector<vector<double> > getSDbyTraj(Trajectory traj, double timestep = TRAJ_TIMESTEP) {
+vector<vector<double> > getSDbyTraj(Trajectory traj, double timestep = TRAJ_TIMESTEP, double timeShift = 0.0) {
 
   vector<double> SS;
   vector<double> DD;
   vector<double> TT;
 
-  double t = 0.0;
+  double t = timeShift;
 //  double timestep = TRAJ_TIMESTEP;
-  while (t <= traj.T + timestep) {
+  while (t <= traj.T /* + timestep*/) {
     double sx = poly_calc(traj.s_coeffs, t);
     double dx = poly_calc(traj.d_coeffs, t);
     SS.push_back(sx);
@@ -484,7 +490,7 @@ vector<double> getTT(double timestep, int num) {
 double findTimeInTrajByXY(Trajectory traj, double car_x, double car_y, double car_yaw, vector<double> maps_s, vector<double> maps_x, vector<double> maps_y) {
 
   auto traj_data = getSDbyTraj(traj, TRAJ_TIMESTEP);
-  auto xy = getXYPath(traj_data[0], traj_data[1], TRAJ_TIMESTEP, maps_s, maps_x, maps_y);
+  auto xy = getXYPath(traj_data[0], traj_data[1], traj_data[2], maps_s, maps_x, maps_y);
 
 //  cout << "findTime: xy = " << endl;
 //  print_vals(xy[0], xy[1]);
@@ -506,10 +512,13 @@ double findTimeInTrajByXY(Trajectory traj, double car_x, double car_y, double ca
 }
 
 
-vector<vector<double> > getXYPathFromTraj(Trajectory traj, vector<double> maps_s, vector<double> maps_x, vector<double> maps_y) {
+vector<vector<double> > getXYPathFromTraj(Trajectory traj, vector<double> maps_s, vector<double> maps_x, vector<double> maps_y, double timeShift = 0.0) {
 
-  auto traj_data = getSDbyTraj(traj, TRAJ_TIMESTEP * 2); // s,d,t
-  auto xy = getXYPath(traj_data[0], traj_data[1], TRAJ_TIMESTEP * 2, maps_s, maps_x, maps_y);
+  auto traj_data = getSDbyTraj(traj, TRAJ_TIMESTEP * 2, timeShift); // s,d,t
+  cout << "traj_data.size = " << traj_data[0].size() << endl;
+  cout << "traj_data[0] = " << traj_data[2][0] << ", " << traj_data[2][traj_data[2].size()-1] << endl;
+
+  auto xy = getXYPath(traj_data[0], traj_data[1], traj_data[2], maps_s, maps_x, maps_y);
   return xy;
 }
 
@@ -525,7 +534,7 @@ void prepare_log() {
 
 
 
-void add_to_log(double dt, double car_x, double car_y, double car_yaw, double car_s, double car_d, double car_speed, Trajectory traj) {
+void add_to_log(double dt, double car_x, double car_y, double car_yaw, double car_s, double car_d, double car_speed, Trajectory traj, json prev_x, json prev_y) {
   ofstream logFile ("log.out", ios::out | ios::app);
   if (logFile.is_open()) {
     json j;
@@ -539,6 +548,8 @@ void add_to_log(double dt, double car_x, double car_y, double car_yaw, double ca
     j["s_coeffs"] = traj.s_coeffs;
     j["d_coeffs"] = traj.d_coeffs;
     j["traj_t"] = traj.T;
+    j["prev_x"] = prev_x;
+    j["prev_y"] = prev_y;
     logFile << j << endl;
     logFile.close();
   } else {
