@@ -35,6 +35,210 @@ using json = nlohmann::json;
 namespace plt = matplotlibcpp;
 
 
+void testLocalTrajectories(vector<double> maps_s, vector<double> maps_x, vector<double> maps_y) {
+
+  cout << endl << ">>> TESTING on STATIC DATA !!!!! [trajectories]" << endl << endl;
+
+  json j = read_log();
+
+  cout << "read from logFile " << j.size() << " lines" << endl;
+
+  unsigned long start = 70; //154
+  unsigned long end = start + 5; // j.size();
+
+  bool plot_first = false;
+  int plot_first_max = 1;
+
+
+  int plot_first_cnt = 0;
+
+
+  double t = 0;
+
+  vector<double> XX;
+  vector<double> YY;
+  vector<double> TT;
+
+  vector<double> SS;
+  vector<double> DD;
+
+  int N = min(end, j.size());
+
+
+  for (int i = start; i < N; ++i) {
+
+    cout << " ======= " << i << " ===========" << endl;
+
+    double car_x = j[i]["car_x"];
+    double car_y = j[i]["car_y"];
+    double car_yaw = deg2rad(j[i]["car_yaw"]);
+    double car_s = j[i]["car_s"];
+    double car_d = j[i]["car_d"];
+    vector<double> prev_x = j[i]["prev_x"];
+    vector<double> prev_y = j[i]["prev_y"];
+    double dt = j[i]["dt"];
+    double car_speed = j[i]["car_speed"];
+    Trajectory car_traj;
+    car_traj.s_coeffs = json_read_vector(j[i]["s_coeffs"]);
+    car_traj.d_coeffs = json_read_vector(j[i]["d_coeffs"]);
+    car_traj.T = j[i]["traj_t"];
+
+    if (i > 0) {
+      XX.push_back(car_x);
+      YY.push_back(car_y);
+      SS.push_back(car_s);
+      DD.push_back(car_d);
+      t += dt;
+      TT.push_back(t);
+    }
+
+
+//    cout << "car s,d = " << car_x << ", " << car_y << endl;
+//    cout << "traj = " << car_traj.str() << endl;
+
+    auto acc_stats = traj_stats_acc(car_traj);
+    auto j_stats = traj_stats_jerk(car_traj);
+    cout << "acc_per_sec = " << acc_stats[0] << ", max_acc = " << acc_stats[1] << endl;
+    cout << "jerk_per_sec = " << j_stats[0] << ", max_jerk = " << j_stats[1] << endl;
+
+
+    // Plot detailed trajectory
+    if (plot_first && plot_first_cnt < plot_first_max) {
+      plot_traj(car_traj);
+      ++plot_first_cnt;
+      if (plot_first_cnt == plot_first_max) plot_first = false;
+    }
+
+    auto xy = getXYPathFromTraj(car_traj, maps_s, maps_x, maps_y);
+
+
+    double car_l = car_speed * 0.05;
+    plt::plot({car_x, car_x + car_l * cos(car_yaw)}, {car_y, car_y + car_l * sin(car_yaw)}, "r-");
+    plt::plot({car_x}, {car_y}, "ro");
+
+
+    plt::ylim(car_y - 1, car_y + 4);
+    plt::xlim(car_x - 1, car_x + 4);
+    plt::grid(true);
+
+    // Traj in XY
+    plt::plot(xy[0], xy[1], "bo");
+
+    // Prev points
+    plt::plot(prev_x, prev_y, "ro");
+
+    // ============ Combine paths ==========================
+
+    int forwardN = 5;
+
+
+    auto traj_data = getSDbyTraj(car_traj, TRAJ_TIMESTEP); // s,d,t
+//    cout << "traj_data.size = " << traj_data[0].size() << endl;
+//    cout << "traj_data[0] = " << traj_data[2][0] << ", " << traj_data[2][traj_data[2].size()-1] << endl;
+
+    auto xy_traj = getXY(traj_data[0], traj_data[1], maps_s, maps_x, maps_y);
+
+    vector<double> xx_n;
+    vector<double> yy_n;
+    vector<double> tt_n;
+
+    if (forwardN > 0) {
+      // Add one first point
+      tt_n.push_back(-PATH_TIMESTEP * forwardN);
+      xx_n.push_back(prev_x[0]);
+      yy_n.push_back(prev_y[0]);
+    }
+
+    // Add first forwardN steps of previous_path
+
+//    for (int i = forwardN; i > 0; --i) {
+//      tt_n.push_back(- PATH_TIMESTEP * i);
+//      xx_n.push_back(previous_path_x[forwardN - i]);
+//      yy_n.push_back(previous_path_y[forwardN - i]);
+//    }
+
+
+    // Add points from new traj
+    for (int i = 0; i < traj_data[0].size(); ++i) {
+      tt_n.push_back(traj_data[2][i]);
+      xx_n.push_back(xy_traj[0][i]);
+      yy_n.push_back(xy_traj[1][i]);
+    }
+
+    plt::plot(xx_n, yy_n, "y*");
+
+//            next_x_vals = xy[0];
+//            next_y_vals = xy[1];
+
+
+    //double T = ss.size() * timestep;
+    double T = car_traj.T;
+
+//    cout << "xx_n, yy_n" << endl;
+
+//    print_vals(xx_n, yy_n, 100);
+
+
+//  vector<double> TT;
+//  for (int i = 0; i < ss.size(); ++i) {
+//    TT.push_back((double)i * timestep);
+//  }
+
+    // Makine it all to splines
+    tk::spline splX;
+    splX.set_points(tt_n, xx_n);
+
+    tk::spline splY;
+    splY.set_points(tt_n, yy_n);
+
+    vector<double> XX_smooth;
+    vector<double> YY_smooth;
+    vector<double> TT;
+    double t = - PATH_TIMESTEP * forwardN;
+    double timestep2 = PATH_TIMESTEP; // path requirements
+    while (t <= T) {
+      XX_smooth.push_back(splX(t));
+      YY_smooth.push_back(splY(t));
+      TT.push_back(t);
+      t += timestep2;
+    }
+
+
+    plt::ylim(YY_smooth[0]-1, YY_smooth[0]+5);
+    plt::xlim(XX_smooth[0]-2, XX_smooth[0]+20);
+    plt::grid(true);
+
+    plt::plot(XX_smooth, YY_smooth, "g>");
+
+
+
+
+
+    plt::annotate(to_string(i), car_x, car_y);
+
+    plt::show();
+
+  }
+
+  plt::subplot(2, 1, 1);
+  plt::plot(TT, XX, "bo");
+  plt::subplot(2, 1, 2);
+  plt::plot(TT, YY, "bo");
+//  plt::subplot(4, 1, 3);
+//  plt::plot(TT, SS, "bo");
+//  plt::subplot(4, 1, 4);
+//  plt::plot(TT, DD, "bo");
+  plt::show();
+
+
+
+  cout << endl <<  "<<<< END STATIC TEST!!! [trajectories]" << endl << endl;
+
+
+
+}
+
+
 void testLocalStored(vector<double> maps_s, vector<double> maps_x, vector<double> maps_y) {
 
   cout << endl << ">>> TESTING on STATIC DATA !!!!! [stored]" << endl << endl;
@@ -63,6 +267,7 @@ void testLocalStored(vector<double> maps_s, vector<double> maps_x, vector<double
   int N = min(end, j.size());
 
   for (int i = start; i < N; ++i) {
+
 
     double car_x = j[i]["car_x"];
     double car_y = j[i]["car_y"];
@@ -229,6 +434,7 @@ void testLocalStored(vector<double> maps_s, vector<double> maps_x, vector<double
   cout << endl <<  "<<<< END STATIC TEST!!! [stored]" << endl << endl;
 
 }
+
 
 
 // Test on local data

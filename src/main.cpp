@@ -121,6 +121,8 @@ int main() {
 
 
 
+          int maxPoints = 50;
+
 
           json msgJson;
 
@@ -184,7 +186,7 @@ int main() {
 
           if (hState.path) {
 
-            forwardN = 0;
+            forwardN = 5;
 
             if (previous_path_x.size() <= forwardN) {
               forwardN = previous_path_x.size() - 1;
@@ -275,10 +277,11 @@ int main() {
 //          cout << "TRAJ: " << traj.str() << endl;
 
 
-
-
-
           vector<vector<double>> xy;
+
+
+          /* Commented reusing old path
+
 
           if (hState.path) {
             xy = getXYPathFromTraj(hState.prev_traj, map_waypoints_s, map_waypoints_x, map_waypoints_y, curr_time);
@@ -297,13 +300,14 @@ int main() {
 
           next_x_vals = xy[0];
           next_y_vals = xy[1];
+          */
 
 
 
-          /* Commented forwardN logic
+          // forwardN logic
           if (forwardN > 0) {
 
-            auto traj_data = getSDbyTraj(traj, TRAJ_TIMESTEP); // s,d,t
+            auto traj_data = getSDbyTraj(traj, PATH_TIMESTEP); // s,d,t
             cout << "traj_data.size = " << traj_data[0].size() << endl;
             cout << "traj_data[0] = " << traj_data[2][0] << ", " << traj_data[2][traj_data[2].size()-1] << endl;
 
@@ -315,17 +319,16 @@ int main() {
 
 
             // Add one first point
-            tt_n.push_back(- PATH_TIMESTEP * forwardN);
-            xx_n.push_back(previous_path_x[0]);
-            yy_n.push_back(previous_path_y[0]);
+//            tt_n.push_back(- PATH_TIMESTEP * forwardN);
+//            xx_n.push_back(previous_path_x[0]);
+//            yy_n.push_back(previous_path_y[0]);
 
             // Add first forwardN steps of previous_path
-
-//            for (int i = forwardN; i > 0; --i) {
-//              tt_n.push_back(- PATH_TIMESTEP * i);
-//              xx_n.push_back(previous_path_x[forwardN - i]);
-//              yy_n.push_back(previous_path_y[forwardN - i]);
-//            }
+            for (int i = forwardN; i > 0; --i) {
+              tt_n.push_back(- PATH_TIMESTEP * i);
+              xx_n.push_back(previous_path_x[forwardN - i]);
+              yy_n.push_back(previous_path_y[forwardN - i]);
+            }
 
 
             // Add points from new traj
@@ -342,9 +345,8 @@ int main() {
             //double T = ss.size() * timestep;
             double T = traj.T;
 
-            cout << "xx_n, yy_n" << endl;
-
-            print_vals(xx_n, yy_n, 100);
+//            cout << "xx_n, yy_n" << endl;
+//            print_vals(xx_n, yy_n, 100);
 
 
 //  vector<double> TT;
@@ -376,16 +378,19 @@ int main() {
               next_y_vals.push_back(YY_smooth[i]);
             }
 
-            vector<double> prev_x;
-            vector<double> prev_y;
-            for (int i = 0; i < previous_path_x.size(); ++i) {
-              prev_x.push_back(previous_path_x[i]);
-              prev_y.push_back(previous_path_y[i]);
-            }
-            print_vals(prev_x, prev_y, 15);
 
-            cout << "mix up" << endl;
-            print_vals(next_x_vals, next_y_vals, 15);
+
+            // Show prev values
+//            vector<double> prev_x;
+//            vector<double> prev_y;
+//            for (int i = 0; i < previous_path_x.size(); ++i) {
+//              prev_x.push_back(previous_path_x[i]);
+//              prev_y.push_back(previous_path_y[i]);
+//            }
+//            print_vals(prev_x, prev_y, 15);
+//
+//            cout << "mix up" << endl;
+//            print_vals(next_x_vals, next_y_vals, 15);
 
 
           } else {
@@ -393,11 +398,15 @@ int main() {
             next_x_vals = xy[0];
             next_y_vals = xy[1];
 
-            cout << "no mix up";
-            print_vals(next_x_vals, next_y_vals, 15);
+//            cout << "no mix up";
+//            print_vals(next_x_vals, next_y_vals, 15);
           }
-          */
 
+
+          add_to_log(hState.dt, car_x, car_y, car_yaw, car_s, car_d, car_speed_m, traj, previous_path_x, previous_path_y);
+
+          hState.path = true;
+          hState.prev_traj = traj;
 
 
 
@@ -716,7 +725,8 @@ int main() {
   if (LOCAL) {
     // Test on local data
 //    testLocal(TEST_JSON_1, map_waypoints_s, map_waypoints_x, map_waypoints_y);
-    testLocalStored(map_waypoints_s, map_waypoints_x, map_waypoints_y);
+//    testLocalStored(map_waypoints_s, map_waypoints_x, map_waypoints_y);
+    testLocalTrajectories(map_waypoints_s, map_waypoints_x, map_waypoints_y);
   } else {
     prepare_log();
 

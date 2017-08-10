@@ -346,7 +346,7 @@ vector<vector<double> > getXYPath(vector<double> ss, vector<double> dd, vector<d
     t += timestep2;
   }
 
-  cout << "smooth_TT[0] = " << TT[0] << ", smooth_TT[end] = " << TT[TT.size()-1] << endl;
+//  cout << "smooth_TT[0] = " << TT[0] << ", smooth_TT[end] = " << TT[TT.size()-1] << endl;
 
   return {XX_smooth, YY_smooth, TT};
 
@@ -518,8 +518,8 @@ double findTimeInTrajByXY(Trajectory traj, double car_x, double car_y, double ca
 vector<vector<double> > getXYPathFromTraj(Trajectory traj, vector<double> maps_s, vector<double> maps_x, vector<double> maps_y, double timeShift = 0.0) {
 
   auto traj_data = getSDbyTraj(traj, TRAJ_TIMESTEP * 2 /*, timeShift*/); // s,d,t
-  cout << "traj_data.size = " << traj_data[0].size() << endl;
-  cout << "traj_data[0] = " << traj_data[2][0] << ", " << traj_data[2][traj_data[2].size()-1] << endl;
+//  cout << "traj_data.size = " << traj_data[0].size() << endl;
+//  cout << "traj_data[0] = " << traj_data[2][0] << ", " << traj_data[2][traj_data[2].size()-1] << endl;
 
   auto xy = getXYPath(traj_data[0], traj_data[1], traj_data[2], maps_s, maps_x, maps_y);
 
@@ -614,8 +614,8 @@ vector<double> traj_stats_acc(Trajectory traj) {
   double total_acc = 0;
   for (int i = 0; i < TT.size(); ++i) {
     double a = poly_calc(s_coeffs_a, TT[i]);
-    if (a > max_acc) {
-      max_acc = a;
+    if (abs(a) > max_acc) {
+      max_acc = abs(a);
     }
     total_acc += abs(a * PATH_TIMESTEP);
   }
@@ -623,8 +623,33 @@ vector<double> traj_stats_acc(Trajectory traj) {
 
   return {acc_per_second, max_acc};
 
+}
+
+vector<double> traj_stats_jerk(Trajectory traj) {
+  auto traj_data = getSDbyTraj(traj, PATH_TIMESTEP);
+  vector<double> SS = traj_data[0];
+  vector<double> DD = traj_data[1];
+  vector<double> TT = traj_data[2];
+
+  vector<double> s_coeffs_v = differentiate(traj.s_coeffs);
+  vector<double> s_coeffs_a = differentiate(s_coeffs_v);
+  vector<double> s_coeffs_j = differentiate(s_coeffs_a);
+
+  double max_j = 0;
+  double total_j = 0;
+  for (int i = 0; i < TT.size(); ++i) {
+    double j = poly_calc(s_coeffs_j, TT[i]);
+    if (abs(j) > max_j) {
+      max_j = abs(j);
+    }
+    total_j += abs(j * PATH_TIMESTEP);
+  }
+  double j_per_second = total_j / traj.T;
+
+  return {j_per_second, max_j};
 
 }
+
 
 
 
