@@ -8,6 +8,7 @@
 
 #include <fstream>
 #include <math.h>
+#include <algorithm>
 #include <chrono>
 #include <iostream>
 #include <fstream>
@@ -389,7 +390,7 @@ vector<vector<double> > getSDbyTraj(Trajectory traj, double timestep = TRAJ_TIME
 
   double t = timeShift;
 //  double timestep = TRAJ_TIMESTEP;
-  while (t <= traj.T /* + timestep*/) {
+  while (t < traj.T /* + timestep*/) {
     double sx = poly_calc(traj.s_coeffs, t);
     double dx = poly_calc(traj.d_coeffs, t);
     SS.push_back(sx);
@@ -397,6 +398,12 @@ vector<vector<double> > getSDbyTraj(Trajectory traj, double timestep = TRAJ_TIME
     TT.push_back(t);
     t += timestep;
   }
+
+  // Add last point
+//  SS.push_back(poly_calc(traj.s_coeffs, traj.T));
+//  DD.push_back(poly_calc(traj.d_coeffs, traj.T));
+//  TT.push_back(traj.T);
+
   return {SS, DD, TT};
 }
 
@@ -534,6 +541,93 @@ vector<vector<double> > getXYPathFromTraj(Trajectory traj, vector<double> maps_s
 }
 
 
+vector<vector<double> > getXYPathConnected(int conn_len, vector<double> prev_x, vector<double> prev_y, Trajectory traj, vector<double> maps_s, vector<double> maps_x, vector<double> maps_y, double timeShift = 0.0) {
+
+  /*
+  auto traj_data = getSDbyTraj(traj, TRAJ_TIMESTEP * 2); // s,d,t
+//  cout << "traj_data.size = " << traj_data[0].size() << endl;
+//  cout << "traj_data[0] = " << traj_data[2][0] << ", " << traj_data[2][traj_data[2].size()-1] << endl;
+
+  auto xy_traj = getXY(traj_data[0], traj_data[1], maps_s, maps_x, maps_y);
+  */
+
+  auto xy_traj = getXYPathFromTraj(traj, maps_s, maps_x, maps_y, timeShift);
+
+  if (prev_x.size() > 0) {
+    int last_idx = prev_x.size() - 1;
+    double disp_x = prev_x[last_idx] - xy_traj[0][0];
+    double disp_y = prev_y[last_idx] - xy_traj[1][0];
+    // Move next path so it's connected with prev path
+    for (int i = 0; i < xy_traj[0].size(); ++i) {
+      xy_traj[0][i] += disp_x;
+      xy_traj[1][i] += disp_y;
+    }
+  }
+
+  return {xy_traj[0], xy_traj[1]};
+
+
+//  vector<double> xx_n;
+//  vector<double> yy_n;
+//  vector<double> tt_n;
+//
+//  if (conn_len > 0 && prev_x.size() > 0) {
+//    int N = min(conn_len, (int)prev_x.size());
+//    int idx = prev_x.size() - N;
+//    // Add one first point
+//    tt_n.push_back(-PATH_TIMESTEP * N);
+//    xx_n.push_back(prev_x[idx]);
+//    yy_n.push_back(prev_y[idx]);
+//  }
+
+  // Add last conn_len steps of previous_path
+
+//    for (int i = 0; i < conn_len; ++i) {
+//      tt_n.push_back(- PATH_TIMESTEP * (conn_len - i));
+//      int idx = prev_x.size() - conn_len + i;
+//      xx_n.push_back(prev_x[idx]);
+//      yy_n.push_back(prev_y[idx]);
+//    }
+
+/*
+  // Add points from new traj
+  for (int i = 0; i < traj_data[0].size(); ++i) {
+    tt_n.push_back(traj_data[2][i]);
+    xx_n.push_back(xy_traj[0][i]);
+    yy_n.push_back(xy_traj[1][i]);
+  }
+
+  double T = traj.T;
+
+  // Makine it all to splines
+  tk::spline splX;
+  splX.set_points(tt_n, xx_n);
+
+  tk::spline splY;
+  splY.set_points(tt_n, yy_n);
+
+  // Calc displacement of first point from last prev point
+  double disp_x =
+
+  vector<double> XX_smooth;
+  vector<double> YY_smooth;
+  vector<double> TT;
+  double t = timeShift;
+  double timestep2 = PATH_TIMESTEP; // path requirements
+  while (t <= T) {
+    XX_smooth.push_back(splX(t));
+    YY_smooth.push_back(splY(t));
+    TT.push_back(t);
+    t += timestep2;
+  }
+  */
+
+
+//  return {XX_smooth, YY_smooth, TT};
+}
+
+
+
 
 void prepare_log() {
   ofstream logFile ("log.out", ios::out);
@@ -545,7 +639,7 @@ void prepare_log() {
 
 
 
-void add_to_log(double dt, double car_x, double car_y, double car_yaw, double car_s, double car_d, double car_speed, Trajectory traj, json prev_x, json prev_y) {
+void add_to_log(double dt, double car_x, double car_y, double car_yaw, double car_s, double car_d, double car_speed, Trajectory traj, json prev_x, json prev_y, double end_path_s, double end_path_d) {
   ofstream logFile ("log.out", ios::out | ios::app);
   if (logFile.is_open()) {
     json j;
@@ -555,6 +649,8 @@ void add_to_log(double dt, double car_x, double car_y, double car_yaw, double ca
     j["car_yaw"] = car_yaw;
     j["car_s"] = car_s;
     j["car_d"] = car_d;
+    j["end_path_s"] = end_path_s;
+    j["end_path_d"] = end_path_d;
     j["car_speed"] = car_speed; // m/s
     j["s_coeffs"] = traj.s_coeffs;
     j["d_coeffs"] = traj.d_coeffs;

@@ -43,10 +43,10 @@ void testLocalTrajectories(vector<double> maps_s, vector<double> maps_x, vector<
 
   cout << "read from logFile " << j.size() << " lines" << endl;
 
-  unsigned long start = 70; //154
-  unsigned long end = start + 5; // j.size();
+  unsigned long start = 0; //154 (1046, 873)
+  unsigned long end = start + 5; //j.size();
 
-  bool plot_first = false;
+  bool plot_first = true;
   int plot_first_max = 1;
 
 
@@ -62,6 +62,9 @@ void testLocalTrajectories(vector<double> maps_s, vector<double> maps_x, vector<
   vector<double> SS;
   vector<double> DD;
 
+  vector<double> end_SS;
+  vector<double> end_DD;
+
   int N = min(end, j.size());
 
 
@@ -76,6 +79,8 @@ void testLocalTrajectories(vector<double> maps_s, vector<double> maps_x, vector<
     double car_d = j[i]["car_d"];
     vector<double> prev_x = j[i]["prev_x"];
     vector<double> prev_y = j[i]["prev_y"];
+    double end_path_s = j[i]["end_path_s"];
+    double end_path_d = j[i]["end_path_d"];
     double dt = j[i]["dt"];
     double car_speed = j[i]["car_speed"];
     Trajectory car_traj;
@@ -88,13 +93,19 @@ void testLocalTrajectories(vector<double> maps_s, vector<double> maps_x, vector<
       YY.push_back(car_y);
       SS.push_back(car_s);
       DD.push_back(car_d);
+      end_SS.push_back(end_path_s);
+      end_DD.push_back(end_path_d);
       t += dt;
       TT.push_back(t);
     }
 
 
-//    cout << "car s,d = " << car_x << ", " << car_y << endl;
-//    cout << "traj = " << car_traj.str() << endl;
+    cout << "car x,y = " << car_x << ", " << car_y << endl;
+    cout << "car s,d = " << car_s << ", " << car_d << endl;
+    cout << "end_path s,d = " << end_path_s << ", " << end_path_d << endl;
+    cout << "prev.size = " << prev_x.size() << endl;
+    cout << "traj = " << car_traj.str() << endl;
+    cout << "traj_end s,d = " << poly_calc(car_traj.s_coeffs, car_traj.T) << ", " << poly_calc(car_traj.d_coeffs, car_traj.T) << endl;
 
     auto acc_stats = traj_stats_acc(car_traj);
     auto j_stats = traj_stats_jerk(car_traj);
@@ -116,16 +127,35 @@ void testLocalTrajectories(vector<double> maps_s, vector<double> maps_x, vector<
     plt::plot({car_x, car_x + car_l * cos(car_yaw)}, {car_y, car_y + car_l * sin(car_yaw)}, "r-");
     plt::plot({car_x}, {car_y}, "ro");
 
+    // Annotate car
+    plt::annotate(to_string(i), car_x, car_y);
 
+
+
+    /*
     plt::ylim(car_y - 1, car_y + 4);
     plt::xlim(car_x - 1, car_x + 4);
     plt::grid(true);
+     */
 
     // Traj in XY
     plt::plot(xy[0], xy[1], "bo");
 
     // Prev points
     plt::plot(prev_x, prev_y, "ro");
+
+    int planHorizon = 50;
+    int connectLength = 5;
+
+    if (prev_x.size() > 0 && prev_x.size() <= planHorizon) {
+      auto xy_conn = getXYPathConnected(connectLength, prev_x, prev_y, car_traj, maps_s, maps_x, maps_y);
+      plt::plot(xy_conn[0], xy_conn[1], "g>");
+    }
+
+
+
+
+    /*
 
     // ============ Combine paths ==========================
 
@@ -210,24 +240,35 @@ void testLocalTrajectories(vector<double> maps_s, vector<double> maps_x, vector<
 
     plt::plot(XX_smooth, YY_smooth, "g>");
 
+    // =========== << Combine Paths ============
+    */
 
 
 
 
-    plt::annotate(to_string(i), car_x, car_y);
 
-    plt::show();
+
+
 
   }
 
-  plt::subplot(2, 1, 1);
+  plt::show();
+
+
+  plt::subplot(4, 1, 1);
   plt::plot(TT, XX, "bo");
-  plt::subplot(2, 1, 2);
+  plt::subplot(4, 1, 2);
   plt::plot(TT, YY, "bo");
 //  plt::subplot(4, 1, 3);
 //  plt::plot(TT, SS, "bo");
 //  plt::subplot(4, 1, 4);
 //  plt::plot(TT, DD, "bo");
+  plt::subplot(4, 1, 3);
+  plt::plot(TT, end_SS, "bo");
+  plt::subplot(4, 1, 4);
+  plt::plot(TT, end_DD, "bo");
+
+
   plt::show();
 
 
@@ -419,14 +460,14 @@ void testLocalStored(vector<double> maps_s, vector<double> maps_x, vector<double
 
 
 
-  plt::subplot(2, 1, 1);
+  plt::subplot(4, 1, 1);
   plt::plot(TT, XX, "bo");
-  plt::subplot(2, 1, 2);
+  plt::subplot(4, 1, 2);
   plt::plot(TT, YY, "bo");
-//  plt::subplot(4, 1, 3);
-//  plt::plot(TT, SS, "bo");
-//  plt::subplot(4, 1, 4);
-//  plt::plot(TT, DD, "bo");
+  plt::subplot(4, 1, 3);
+  plt::plot(TT, SS, "bo");
+  plt::subplot(4, 1, 4);
+  plt::plot(TT, DD, "bo");
   plt::show();
 
 

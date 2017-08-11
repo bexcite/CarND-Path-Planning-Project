@@ -13,6 +13,7 @@
   <component name="ChangeListManager">
     <list default="true" id="11a0d80e-a63b-47ea-8258-db9814927d1f" name="Default" comment="">
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/.idea/workspace.xml" afterPath="$PROJECT_DIR$/.idea/workspace.xml" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/constants.h" afterPath="$PROJECT_DIR$/src/constants.h" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/helpers.h" afterPath="$PROJECT_DIR$/src/helpers.h" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/main.cpp" afterPath="$PROJECT_DIR$/src/main.cpp" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/test-local.h" afterPath="$PROJECT_DIR$/src/test-local.h" />
@@ -31,11 +32,11 @@
   <component name="ExecutionTargetManager" SELECTED_TARGET="default_target" />
   <component name="FileEditorManager">
     <leaf SIDE_TABS_SIZE_LIMIT_KEY="300">
-      <file leaf-file-name="main.cpp" pinned="false" current-in-tab="true">
+      <file leaf-file-name="main.cpp" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/src/main.cpp">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="153">
-              <caret line="123" column="29" lean-forward="true" selection-start-line="123" selection-start-column="29" selection-end-line="123" selection-end-column="29" />
+            <state relative-caret-position="4">
+              <caret line="355" column="22" lean-forward="false" selection-start-line="355" selection-start-column="22" selection-end-line="355" selection-end-column="22" />
               <folding>
                 <element signature="e#0#18#0" expanded="true" />
               </folding>
@@ -56,8 +57,8 @@
       <file leaf-file-name="test-local.h" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/src/test-local.h">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="136">
-              <caret line="33" column="0" lean-forward="true" selection-start-line="33" selection-start-column="0" selection-end-line="33" selection-end-column="0" />
+            <state relative-caret-position="697">
+              <caret line="141" column="34" lean-forward="false" selection-start-line="141" selection-start-column="34" selection-end-line="141" selection-end-column="34" />
               <folding>
                 <element signature="e#120#138#0" expanded="true" />
                 <element signature="e#236#253#0" expanded="true" />
@@ -66,11 +67,11 @@
           </provider>
         </entry>
       </file>
-      <file leaf-file-name="constants.h" pinned="false" current-in-tab="false">
+      <file leaf-file-name="constants.h" pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/src/constants.h">
           <provider selected="true" editor-type-id="text-editor">
             <state relative-caret-position="136">
-              <caret line="8" column="14" lean-forward="false" selection-start-line="8" selection-start-column="14" selection-end-line="8" selection-end-column="14" />
+              <caret line="8" column="13" lean-forward="false" selection-start-line="8" selection-start-column="13" selection-end-line="8" selection-end-column="13" />
               <folding />
             </state>
           </provider>
@@ -79,12 +80,12 @@
       <file leaf-file-name="helpers.h" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/src/helpers.h">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="321">
-              <caret line="634" column="25" lean-forward="true" selection-start-line="634" selection-start-column="25" selection-end-line="634" selection-end-column="25" />
+            <state relative-caret-position="66">
+              <caret line="516" column="29" lean-forward="false" selection-start-line="516" selection-start-column="29" selection-end-line="516" selection-end-column="29" />
               <folding>
                 <element signature="e#118#136#0" expanded="true" />
-                <element signature="e#232#249#0" expanded="true" />
-                <element signature="e#413#432#0" expanded="true" />
+                <element signature="e#253#270#0" expanded="true" />
+                <element signature="e#434#453#0" expanded="true" />
               </folding>
             </state>
           </provider>
@@ -93,7 +94,7 @@
       <file leaf-file-name="helpers_plot.h" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/src/helpers_plot.h">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="157">
+            <state relative-caret-position="75">
               <caret line="18" column="5" lean-forward="false" selection-start-line="18" selection-start-column="5" selection-end-line="18" selection-end-column="5" />
               <folding>
                 <element signature="e#123#142#0" expanded="true" />
@@ -141,12 +142,12 @@
         <option value="$PROJECT_DIR$/src/spline.h" />
         <option value="$PROJECT_DIR$/.gitignore" />
         <option value="$PROJECT_DIR$/src/helpers.h.h" />
-        <option value="$PROJECT_DIR$/build/log.out" />
         <option value="$PROJECT_DIR$/src/helpers_plot.h" />
-        <option value="$PROJECT_DIR$/src/helpers.h" />
-        <option value="$PROJECT_DIR$/src/constants.h" />
+        <option value="$PROJECT_DIR$/build/log.out" />
         <option value="$PROJECT_DIR$/src/main.cpp" />
         <option value="$PROJECT_DIR$/src/test-local.h" />
+        <option value="$PROJECT_DIR$/src/constants.h" />
+        <option value="$PROJECT_DIR$/src/helpers.h" />
       </list>
     </option>
   </component>
@@ -441,12 +442,12 @@
       <option name="presentableId" value="Default" />
       <updated>1501515828844</updated>
       <workItem from="1501515832325" duration="74997000" />
-      <workItem from="1502055980449" duration="30592000" />
+      <workItem from="1502055980449" duration="43198000" />
     </task>
     <servers />
   </component>
   <component name="TimeTrackingManager">
-    <option name="totallyTimeSpent" value="105589000" />
+    <option name="totallyTimeSpent" value="118195000" />
   </component>
   <component name="ToolWindowManager">
     <frame x="0" y="23" width="1280" height="727" extended-state="6" />
@@ -534,8 +535,8 @@
           <caret line="536" column="23" lean-forward="true" selection-start-line="536" selection-start-column="23" selection-end-line="536" selection-end-column="23" />
           <folding>
             <element signature="e#118#136#0" expanded="true" />
-            <element signature="e#232#249#0" expanded="true" />
-            <element signature="e#413#432#0" expanded="true" />
+            <element signature="e#253#270#0" expanded="true" />
+            <element signature="e#434#453#0" expanded="true" />
           </folding>
         </state>
       </provider>
@@ -615,14 +616,6 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/build/log.out">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="17">
-          <caret line="0" column="279" lean-forward="false" selection-start-line="0" selection-start-column="279" selection-end-line="0" selection-end-column="279" />
-          <folding />
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/data/highway_map.csv">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="136">
@@ -631,9 +624,17 @@
         </state>
       </provider>
     </entry>
+    <entry file="file://$PROJECT_DIR$/build/log.out">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="34">
+          <caret line="0" column="279" lean-forward="false" selection-start-line="0" selection-start-column="279" selection-end-line="0" selection-end-column="279" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
     <entry file="file://$PROJECT_DIR$/src/helpers_plot.h">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="157">
+        <state relative-caret-position="75">
           <caret line="18" column="5" lean-forward="false" selection-start-line="18" selection-start-column="5" selection-end-line="18" selection-end-column="5" />
           <folding>
             <element signature="e#123#142#0" expanded="true" />
@@ -641,30 +642,32 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/src/helpers.h">
+    <entry file="file://$PROJECT_DIR$/src/main.cpp">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="321">
-          <caret line="634" column="25" lean-forward="true" selection-start-line="634" selection-start-column="25" selection-end-line="634" selection-end-column="25" />
+        <state relative-caret-position="4">
+          <caret line="355" column="22" lean-forward="false" selection-start-line="355" selection-start-column="22" selection-end-line="355" selection-end-column="22" />
           <folding>
-            <element signature="e#118#136#0" expanded="true" />
-            <element signature="e#232#249#0" expanded="true" />
-            <element signature="e#413#432#0" expanded="true" />
+            <element signature="e#0#18#0" expanded="true" />
           </folding>
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/src/constants.h">
+    <entry file="file://$PROJECT_DIR$/src/helpers.h">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="136">
-          <caret line="8" column="14" lean-forward="false" selection-start-line="8" selection-start-column="14" selection-end-line="8" selection-end-column="14" />
-          <folding />
+        <state relative-caret-position="66">
+          <caret line="516" column="29" lean-forward="false" selection-start-line="516" selection-start-column="29" selection-end-line="516" selection-end-column="29" />
+          <folding>
+            <element signature="e#118#136#0" expanded="true" />
+            <element signature="e#253#270#0" expanded="true" />
+            <element signature="e#434#453#0" expanded="true" />
+          </folding>
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/src/test-local.h">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="136">
-          <caret line="33" column="0" lean-forward="true" selection-start-line="33" selection-start-column="0" selection-end-line="33" selection-end-column="0" />
+        <state relative-caret-position="697">
+          <caret line="141" column="34" lean-forward="false" selection-start-line="141" selection-start-column="34" selection-end-line="141" selection-end-column="34" />
           <folding>
             <element signature="e#120#138#0" expanded="true" />
             <element signature="e#236#253#0" expanded="true" />
@@ -672,13 +675,11 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/src/main.cpp">
+    <entry file="file://$PROJECT_DIR$/src/constants.h">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="153">
-          <caret line="123" column="29" lean-forward="true" selection-start-line="123" selection-start-column="29" selection-end-line="123" selection-end-column="29" />
-          <folding>
-            <element signature="e#0#18#0" expanded="true" />
-          </folding>
+        <state relative-caret-position="136">
+          <caret line="8" column="13" lean-forward="false" selection-start-line="8" selection-start-column="13" selection-end-line="8" selection-end-column="13" />
+          <folding />
         </state>
       </provider>
     </entry>

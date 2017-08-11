@@ -110,8 +110,8 @@ int main() {
           double car_speed = j[1]["speed"];
 
           // Previous path data given to the Planner
-          auto previous_path_x = j[1]["previous_path_x"];
-          auto previous_path_y = j[1]["previous_path_y"];
+          vector<double> previous_path_x = j[1]["previous_path_x"];
+          vector<double> previous_path_y = j[1]["previous_path_y"];
           // Previous path's end s and d values
           double end_path_s = j[1]["end_path_s"];
           double end_path_d = j[1]["end_path_d"];
@@ -203,8 +203,11 @@ int main() {
             cout << "found forward_time = " << forward_time << endl;
 
             // for testing - TODO: fix names
-            curr_time = forward_time;
-            cout << "Curr Time == Forward Time" << endl;
+//            curr_time = forward_time;
+//            cout << "Curr Time == Forward Time" << endl;
+            curr_time = hState.prev_traj.T;
+            cout << "Curr Time == T == " << hState.prev_traj.T << endl;
+
 
             // Look at s,d params at the curr_time
             double curr_s, curr_s_v, curr_s_a;
@@ -219,12 +222,14 @@ int main() {
             curr_d_a = poly_calc(hState.prev_traj.d_coeffs, curr_time, 2);
             print_coeffs("curr_d = ", {curr_d, curr_d_v, curr_d_a});
 
-            s_start[0] = curr_s;
+//            s_start[0] = curr_s;
+            s_start[0] = end_path_s;
 
             s_start[1] = curr_s_v;
             s_start[2] = curr_s_a;
 
-            d_start[0] = curr_d;
+//            d_start[0] = curr_d;
+            d_start[0] = end_path_d;
 
             d_start[1] = curr_d_v;
             d_start[2] = curr_d_a;
@@ -245,22 +250,20 @@ int main() {
 //          d_start = {car_d, 0, 0};
           d_end = {6.0, 0, 0};
 
+          double T = 8.0;
 
-
-//          double T = 8.0;
-
-          double s_avg_v = (s_start[1] + s_end[1]) / 2;
-          double T = (s_end[0] - s_start[0]) / s_avg_v;
-          T = 8.0;
+//          double s_avg_v = (s_start[1] + s_end[1]) / 2;
+//          double T = (s_end[0] - s_start[0]) / s_avg_v;
+//          T = 8.0;
 
 
           // Mimic prev trajectory
-          if (hState.path) {
-            double last_t = hState.prev_traj.T;
-            s_end[0] = poly_calc(hState.prev_traj.s_coeffs, last_t);
-            d_end[0] = poly_calc(hState.prev_traj.d_coeffs, last_t);
-            T = hState.prev_traj.T - curr_time;
-          }
+//          if (hState.path) {
+//            double last_t = hState.prev_traj.T;
+//            s_end[0] = poly_calc(hState.prev_traj.s_coeffs, last_t);
+//            d_end[0] = poly_calc(hState.prev_traj.d_coeffs, last_t);
+//            T = hState.prev_traj.T - curr_time;
+//          }
 
 
           print_coeffs("FINAL s_end = ", s_end);
@@ -301,6 +304,67 @@ int main() {
           next_x_vals = xy[0];
           next_y_vals = xy[1];
           */
+
+
+          if (hState.path) {
+
+            // simply copy previous
+//            for (int i = 0; i < previous_path_x.size(); ++i) {
+//              next_x_vals.push_back(previous_path_x[i]);
+//              next_y_vals.push_back(previous_path_y[i]);
+//            }
+
+
+            if (previous_path_x.size() >= maxPoints) {
+
+              // copy previous
+              for (int i = 0; i < previous_path_x.size(); ++i) {
+                next_x_vals.push_back(previous_path_x[i]);
+                next_y_vals.push_back(previous_path_y[i]);
+              }
+
+              add_to_log(hState.dt, car_x, car_y, car_yaw, car_s, car_d, car_speed_m, hState.prev_traj, previous_path_x, previous_path_y, end_path_s, end_path_d);
+
+            } else {
+              // Less than maxPoints
+
+
+              // copy previous
+              for (int i = 0; i < previous_path_x.size(); ++i) {
+                next_x_vals.push_back(previous_path_x[i]);
+                next_y_vals.push_back(previous_path_y[i]);
+              }
+
+              // and add new one
+//              xy = getXYPathFromTraj(traj, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+              xy = getXYPathConnected(5, previous_path_x, previous_path_y, traj, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+              for (int i = 1; i < xy[0].size(); ++i) {
+                next_x_vals.push_back(xy[0][i]);
+                next_y_vals.push_back(xy[1][i]);
+              }
+
+              hState.path = true;
+              hState.prev_traj = traj;
+
+              add_to_log(hState.dt, car_x, car_y, car_yaw, car_s, car_d, car_speed_m, traj, previous_path_x, previous_path_y, end_path_s, end_path_d);
+
+
+            }
+
+
+          } else {
+            xy = getXYPathFromTraj(traj, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+            next_x_vals = xy[0];
+            next_y_vals = xy[1];
+
+            add_to_log(hState.dt, car_x, car_y, car_yaw, car_s, car_d, car_speed_m, traj, previous_path_x, previous_path_y, end_path_s, end_path_d);
+
+            hState.path = true;
+            hState.prev_traj = traj;
+
+          }
+
+          /*
 
 
 
@@ -407,7 +471,7 @@ int main() {
 
           hState.path = true;
           hState.prev_traj = traj;
-
+          */
 
 
 
