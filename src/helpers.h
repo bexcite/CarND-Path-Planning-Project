@@ -83,6 +83,9 @@ public:
 
   Trajectory prev_traj;
 
+  vector<vector<double> > prev_xy;
+  int prev_next_idx = 0;
+
   vector<double> vec_car_x;
   vector<double> vec_car_y;
   vector<double> vec_car_yaw;
@@ -541,7 +544,7 @@ vector<vector<double> > getXYPathFromTraj(Trajectory traj, vector<double> maps_s
 }
 
 
-vector<vector<double> > getXYPathConnected(int conn_len, vector<double> prev_x, vector<double> prev_y, Trajectory traj, vector<double> maps_s, vector<double> maps_x, vector<double> maps_y, double timeShift = 0.0) {
+vector<vector<double> > getXYPathConnected(vector<double> prev_x, vector<double> prev_y, Trajectory traj, vector<double> maps_s, vector<double> maps_x, vector<double> maps_y, double timeShift = 0.0) {
 
   /*
   auto traj_data = getSDbyTraj(traj, TRAJ_TIMESTEP * 2); // s,d,t

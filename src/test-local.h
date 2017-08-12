@@ -43,10 +43,10 @@ void testLocalTrajectories(vector<double> maps_s, vector<double> maps_x, vector<
 
   cout << "read from logFile " << j.size() << " lines" << endl;
 
-  unsigned long start = 0; //154 (1046, 873)
-  unsigned long end = start + 5; //j.size();
+  unsigned long start = 30; //154 (1046, 873)
+  unsigned long end = start + 6; //j.size();
 
-  bool plot_first = true;
+  bool plot_first = false;
   int plot_first_max = 1;
 
 
@@ -132,27 +132,28 @@ void testLocalTrajectories(vector<double> maps_s, vector<double> maps_x, vector<
 
 
 
-    /*
-    plt::ylim(car_y - 1, car_y + 4);
-    plt::xlim(car_x - 1, car_x + 4);
+
+    plt::ylim(car_y - 0.5, car_y + 1);
+    plt::xlim(car_x - 0.5, car_x + 1);
     plt::grid(true);
-     */
+
 
     // Traj in XY
     plt::plot(xy[0], xy[1], "bo");
 
     // Prev points
-    plt::plot(prev_x, prev_y, "ro");
+    plt::plot(prev_x, prev_y, "r+");
 
+/*
     int planHorizon = 50;
     int connectLength = 5;
 
     if (prev_x.size() > 0 && prev_x.size() <= planHorizon) {
-      auto xy_conn = getXYPathConnected(connectLength, prev_x, prev_y, car_traj, maps_s, maps_x, maps_y);
+      auto xy_conn = getXYPathConnected(prev_x, prev_y, car_traj, maps_s, maps_x, maps_y);
       plt::plot(xy_conn[0], xy_conn[1], "g>");
     }
 
-
+*/
 
 
     /*
@@ -247,12 +248,13 @@ void testLocalTrajectories(vector<double> maps_s, vector<double> maps_x, vector<
 
 
 
-
+    plt::show();
 
 
   }
 
-  plt::show();
+
+
 
 
   plt::subplot(4, 1, 1);

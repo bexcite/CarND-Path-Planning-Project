@@ -116,8 +116,20 @@ int main() {
           double end_path_s = j[1]["end_path_s"];
           double end_path_d = j[1]["end_path_d"];
 
+          double end_path_x = 0.0;
+          double end_path_y = 0.0;
+          double end_path_yaw = car_yaw;
+
+          if (previous_path_x.size() > 0) {
+            int last_idx = previous_path_x.size() - 1;
+            end_path_x = previous_path_x[last_idx];
+            end_path_y = previous_path_y[last_idx];
+            end_path_yaw = atan2(previous_path_y[last_idx] - previous_path_y[last_idx-1], previous_path_x[last_idx] - previous_path_x[last_idx-1]);
+          }
+
           // Sensor Fusion Data, a list of all other cars on the same side of the road.
           auto sensor_fusion = j[1]["sensor_fusion"];
+
 
 
 
@@ -165,6 +177,7 @@ int main() {
           cout << "car_speed = " << car_speed << "( " << car_speed_m << " )" << endl;
           cout << "s,d = " << car_s << ", " << car_d << endl;
           cout << "end_path s,d = " << end_path_s << ", " << end_path_d << endl;
+          cout << "end_path x,y,yaw = " << end_path_x << ", " << end_path_y << ", " << end_path_yaw << endl;
           cout << "prev_path.size = " << previous_path_x.size() << endl;
           cout << "acc = " << hState.acc << endl;
 
@@ -180,33 +193,12 @@ int main() {
           vector<double> d_end;
 
 
-          int forwardN = 0;
-
           double curr_time;
 
           if (hState.path) {
 
-            forwardN = 5;
-
-            if (previous_path_x.size() <= forwardN) {
-              forwardN = previous_path_x.size() - 1;
-            }
-            double forward_x = previous_path_x[forwardN];
-            double forward_y = previous_path_y[forwardN];
-
-
-            curr_time = findTimeInTrajByXY(hState.prev_traj, car_x, car_y, car_yaw, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+            curr_time = findTimeInTrajByXY(hState.prev_traj, end_path_x, end_path_y, end_path_yaw, map_waypoints_s, map_waypoints_x, map_waypoints_y);
             cout << "found curr_time = " << curr_time << endl;
-
-            double forward_time;
-            forward_time = findTimeInTrajByXY(hState.prev_traj, forward_x, forward_y, car_yaw, map_waypoints_s, map_waypoints_x, map_waypoints_y);
-            cout << "found forward_time = " << forward_time << endl;
-
-            // for testing - TODO: fix names
-//            curr_time = forward_time;
-//            cout << "Curr Time == Forward Time" << endl;
-            curr_time = hState.prev_traj.T;
-            cout << "Curr Time == T == " << hState.prev_traj.T << endl;
 
 
             // Look at s,d params at the curr_time
@@ -222,14 +214,14 @@ int main() {
             curr_d_a = poly_calc(hState.prev_traj.d_coeffs, curr_time, 2);
             print_coeffs("curr_d = ", {curr_d, curr_d_v, curr_d_a});
 
-//            s_start[0] = curr_s;
-            s_start[0] = end_path_s;
+            s_start[0] = curr_s;
+//            s_start[0] = end_path_s;
 
             s_start[1] = curr_s_v;
             s_start[2] = curr_s_a;
 
-//            d_start[0] = curr_d;
-            d_start[0] = end_path_d;
+            d_start[0] = curr_d;
+//            d_start[0] = end_path_d;
 
             d_start[1] = curr_d_v;
             d_start[2] = curr_d_a;
@@ -317,6 +309,8 @@ int main() {
 
             if (previous_path_x.size() >= maxPoints) {
 
+              cout << "[] just copy all" << endl;
+
               // copy previous
               for (int i = 0; i < previous_path_x.size(); ++i) {
                 next_x_vals.push_back(previous_path_x[i]);
@@ -328,41 +322,95 @@ int main() {
             } else {
               // Less than maxPoints
 
+              cout << "[] less than maxPoints" << endl;
 
-              // copy previous
+              // first copy previous points
               for (int i = 0; i < previous_path_x.size(); ++i) {
                 next_x_vals.push_back(previous_path_x[i]);
                 next_y_vals.push_back(previous_path_y[i]);
               }
 
-              // and add new one
-//              xy = getXYPathFromTraj(traj, map_waypoints_s, map_waypoints_x, map_waypoints_y);
-              xy = getXYPathConnected(5, previous_path_x, previous_path_y, traj, map_waypoints_s, map_waypoints_x, map_waypoints_y);
-              for (int i = 1; i < xy[0].size(); ++i) {
-                next_x_vals.push_back(xy[0][i]);
-                next_y_vals.push_back(xy[1][i]);
+              // second check existing path points in stash
+              if (hState.prev_next_idx < hState.prev_xy[0].size()) {
+
+                cout << "[] have points on stash - use them" << endl;
+
+                int prev_next_idx = hState.prev_next_idx;
+
+                // Have points copy up to maxPoints (or what we have)
+                for (int i = 0; i < maxPoints - previous_path_x.size() && i + hState.prev_next_idx < hState.prev_xy[0].size(); ++i) {
+                  next_x_vals.push_back(hState.prev_xy[0][hState.prev_next_idx + i]);
+                  next_y_vals.push_back(hState.prev_xy[1][hState.prev_next_idx + i]);
+                  ++prev_next_idx;
+                }
+
+                hState.prev_next_idx = prev_next_idx;
+
+                add_to_log(hState.dt, car_x, car_y, car_yaw, car_s, car_d, car_speed_m, hState.prev_traj, previous_path_x, previous_path_y, end_path_s, end_path_d);
+
+              } else {
+                // Use new trajectory
+
+                cout << "[] using new trajectory" << endl;
+
+                xy = getXYPathConnected(previous_path_x, previous_path_y, traj, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+
+                int path_next_idx = 1;
+
+                for (int i = 0; i < maxPoints - previous_path_x.size() && i < xy[0].size(); ++i) {
+                  next_x_vals.push_back(xy[0][i+1]);
+                  next_y_vals.push_back(xy[1][i+1]);
+                  ++path_next_idx;
+                }
+
+                hState.path = true;
+                hState.prev_traj = traj;
+                hState.prev_xy = xy;
+                hState.prev_next_idx = path_next_idx;
+
+                add_to_log(hState.dt, car_x, car_y, car_yaw, car_s, car_d, car_speed_m, traj, previous_path_x, previous_path_y, end_path_s, end_path_d);
+
+
               }
 
-              hState.path = true;
-              hState.prev_traj = traj;
-
-              add_to_log(hState.dt, car_x, car_y, car_yaw, car_s, car_d, car_speed_m, traj, previous_path_x, previous_path_y, end_path_s, end_path_d);
 
 
             }
 
 
           } else {
-            xy = getXYPathFromTraj(traj, map_waypoints_s, map_waypoints_x, map_waypoints_y);
-            next_x_vals = xy[0];
-            next_y_vals = xy[1];
+            // First trajectory
 
-            add_to_log(hState.dt, car_x, car_y, car_yaw, car_s, car_d, car_speed_m, traj, previous_path_x, previous_path_y, end_path_s, end_path_d);
+            cout << "[] first trajectory" << endl;
+
+            xy = getXYPathFromTraj(traj, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+
+            int path_next_idx = 0;
+
+            // Copy to maxPoints elements in prev points
+            for (int i = 0; i < maxPoints - previous_path_x.size() && i < xy[0].size(); ++i) {
+              next_x_vals.push_back(xy[0][i]);
+              next_y_vals.push_back(xy[1][i]);
+              ++path_next_idx;
+            }
 
             hState.path = true;
             hState.prev_traj = traj;
+            hState.prev_xy = xy;
+            hState.prev_next_idx = path_next_idx;
+
+            add_to_log(hState.dt, car_x, car_y, car_yaw, car_s, car_d, car_speed_m, traj, previous_path_x, previous_path_y, end_path_s, end_path_d);
+
+
 
           }
+
+
+          if (hState.path) {
+            cout << "stashed prev_xy.size = " << hState.prev_xy[0].size() << endl;
+            cout << "stashed prev_next_idx = " << hState.prev_next_idx << endl;
+          }
+
 
           /*
 
