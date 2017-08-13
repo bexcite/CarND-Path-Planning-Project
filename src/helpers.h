@@ -977,6 +977,26 @@ public:
     return {xy_traj[0], xy_traj[1], sd_traj[2]};
   }
 
+  // Returns {lane_num, }
+  vector<double> estimateLane(int lane, double car_s, double car_d, double end_s, double end_d) {
+    double s_start = car_s - 2 * CAR_LENGTH;
+
+    auto closest = getClosestCar(s_start, car_d, lane);
+
+    double safe_distance = (end_s + 1 * CAR_LENGTH) - s_start;
+    if (!closest.empty()) {
+      double dist = closest[5] - s_start;
+      if (dist < safe_distance) {
+        return {}; // not safe to use this lane
+      }
+      if (dist < 1.5 * safe_distance) {
+        return {(double)lane, closest[7]};
+      }
+    }
+    return {(double)lane, SPEED_LIMIT};
+  }
+
+  // In a given lane forward from a given position
   vector<double> getClosestCar(double car_s, double car_d, int lane) const {
     double lane_d = LANE_WIDTH * (0.5 + lane);
     double lane_dl = LANE_WIDTH * (lane); // left edge
@@ -1020,11 +1040,11 @@ Trajectory genTraj(double tLane, double tSpeed, vector<double> s_start, vector<d
     cout << "dist to car = " << f_car_dist << endl;
 
     if (3 * CAR_LENGTH < f_car_dist && f_car_dist < 5 * CAR_LENGTH) {
-      tSpeed = min(f_car[7], SPEED_LIMIT);
+      tSpeed = min(f_car[7], tSpeed);
       T = 3.0;
       cout << "NEW SPEED 3-5: = " << tSpeed << endl;
     } else if (f_car_dist < 3 * CAR_LENGTH) {
-      tSpeed = min(f_car[7] * 0.9, SPEED_LIMIT);
+      tSpeed = min(f_car[7] * 0.9, tSpeed);
       T = 3.0;
       cout << "NEW SPEED 0-3: = " << tSpeed << endl;
     }

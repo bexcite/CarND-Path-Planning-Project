@@ -79,9 +79,10 @@ int main() {
 
   SensorFusion sf(map_waypoints_s, map_waypoints_x, map_waypoints_y);
 
+  int targetLane = 1;
 
 
-  h.onMessage([&sf,&hState,&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy](uWS::WebSocket<uWS::SERVER> *ws, char *data, size_t length,
+  h.onMessage([&targetLane,&sf,&hState,&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy](uWS::WebSocket<uWS::SERVER> *ws, char *data, size_t length,
                      uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
@@ -138,7 +139,7 @@ int main() {
 
           int maxPoints = 50;
           double targetSpeed = 49.5 * 1609.344 / 3600.0;
-          int targetLane = 1;
+
 
 
 
@@ -251,7 +252,51 @@ int main() {
           print_coeffs("FINAL s_start = ", s_start);
           print_coeffs("FINAL d_start = ", d_start);
 
+
+
+          // test alt lanes
+          // get adj lanes
+          vector<int> adj_lanes;
+          if (targetLane == 0) {
+            adj_lanes.push_back(1);
+          } else if (targetLane == 1) {
+            adj_lanes.push_back(0);
+            adj_lanes.push_back(2);
+          } else if (targetLane == 2) {
+            adj_lanes.push_back(1);
+          }
+
+
+          // Check alt lanes
+          if (hState.path) {
+            // Get current planned speed
+            double planned_speed = poly_calc(hState.prev_traj.s_coeffs, hState.prev_traj.T, 1);
+            cout << "planned speed = " << planned_speed << endl;
+
+            for (int i = 0; i < adj_lanes.size(); ++i) {
+              int lc = adj_lanes[i];
+              auto lc_data = sf.estimateLane(lc, car_s, car_d, s_start[0], d_start[0]);
+              cout << "eval lane L" << lc << endl;
+              print_coeffs("lc_data = ", lc_data);
+
+
+              if (!lc_data.empty() && lc_data[1] > planned_speed + 3) {
+                cout << "select line candidate " << lc << endl;
+                targetLane = lc;
+                planned_speed = lc_data[1];
+                targetSpeed = planned_speed;
+              }
+            }
+
+          }
+
+          cout << "TARGET: Lane = " << targetLane << ", " << targetSpeed << endl;
+
+
+
+
           auto traj = genTraj(targetLane, targetSpeed, s_start, d_start, sf);
+
 
 /*
           // Make a straight line trajectory
