@@ -16,9 +16,9 @@ namespace plt = matplotlibcpp;
 
 
 
-void plot_traj(Trajectory traj) {
+void plot_traj(Trajectory traj, double timestep = TRAJ_TIMESTEP) {
 
-  double timestep = TRAJ_TIMESTEP;
+//  double timestep = TRAJ_TIMESTEP;
 
   auto traj_data = getSDbyTraj(traj, timestep);
   vector<double> SS = traj_data[0];
@@ -42,12 +42,14 @@ void plot_traj(Trajectory traj) {
 
   // Show traj
   plt::plot(SS, DD, "bo");
+//  plt::plot(TT, SS, "bo");
 
   // Annotate traj
   for (int i = 0; i < TT.size(); i += int(1.0/timestep)) {
     ostringstream oss;
     oss << " " << TT[i];
     plt::annotate(oss.str(), SS[i], DD[i] + 0.2);
+//    plt::annotate(oss.str(), TT[i], SS[i] + 0.2);
   }
 
 

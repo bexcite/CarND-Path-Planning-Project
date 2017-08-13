@@ -21,6 +21,7 @@
 //#include "matplotlibcpp.h"
 //#include <typeinfo>
 #include <unistd.h>
+#include <cassert>
 #include "spline.h"
 #include "constants.h"
 
@@ -127,7 +128,6 @@ public:
   }
 
 };
-
 
 
 
@@ -642,11 +642,12 @@ void prepare_log() {
 
 
 
-void add_to_log(double dt, double car_x, double car_y, double car_yaw, double car_s, double car_d, double car_speed, Trajectory traj, json prev_x, json prev_y, double end_path_s, double end_path_d) {
+void add_to_log(double dt, double dt_d,  double car_x, double car_y, double car_yaw, double car_s, double car_d, double car_speed, Trajectory traj, vector<double> prev_traj_x, vector<double> prev_traj_y, int prev_next_idx, json prev_x, json prev_y, double end_path_s, double end_path_d, vector<double> next_x_vals, vector<double> next_y_vals, json sensor_fusion) {
   ofstream logFile ("log.out", ios::out | ios::app);
   if (logFile.is_open()) {
     json j;
     j["dt"] = dt;
+    j["dt_d"] = dt_d;
     j["car_x"] = car_x;
     j["car_y"] = car_y;
     j["car_yaw"] = car_yaw;
@@ -660,6 +661,12 @@ void add_to_log(double dt, double car_x, double car_y, double car_yaw, double ca
     j["traj_t"] = traj.T;
     j["prev_x"] = prev_x;
     j["prev_y"] = prev_y;
+    j["prev_traj_x"] = prev_traj_x;
+    j["prev_traj_y"] = prev_traj_y;
+    j["prev_next_idx"] = prev_next_idx;
+    j["next_x_vals"] = next_x_vals;
+    j["next_y_vals"] = next_y_vals;
+    j["sensor_fusion"] = sensor_fusion;
     logFile << j << endl;
     logFile.close();
   } else {
@@ -748,6 +755,251 @@ vector<double> traj_stats_jerk(Trajectory traj) {
   return {j_per_second, max_j};
 
 }
+
+
+Trajectory genTraj(double tLane, double tSpeed, vector<double> s_start, vector<double> d_start, double T = 5.0) {
+
+  double end_d = (2.0 + 4.0 * tLane);
+
+  double avg_v = distance(0.0, 0.0, s_start[1], d_start[1]);
+  avg_v = avg_v + distance(0.0, 0.0, tSpeed, 0.0);
+  avg_v = avg_v/2;
+
+  double travel_dist = avg_v * T;
+
+
+  double delta_d = end_d - d_start[0];
+  double s_dist = sqrt(travel_dist * travel_dist - delta_d * delta_d);
+
+
+  vector<double> s_end = {s_start[0] + s_dist, tSpeed, 0.0}; // {car_s+100, 15, 0};
+  vector<double> d_end = {end_d, 0.0, 0.0};
+
+
+
+  cout << "s_dist = " << s_dist << endl;
+  cout << "avg_v = " << avg_v << endl;
+
+  print_coeffs("s_start = ", s_start);
+  print_coeffs("d_start = ", d_start);
+  print_coeffs("s_end = ", s_end);
+  print_coeffs("d_end = ", d_end);
+
+  cout << "T = " << T << endl;
+
+  auto traj = getJMT(s_start, s_end, d_start, d_end, T);
+
+  return traj;
+
+
+}
+
+
+
+class SensorFusion {
+public:
+  int track_n = 10;
+  vector<vector<vector<double> > > sensorData;
+
+  vector<double> maps_s;
+  vector<double> maps_x;
+  vector<double> maps_y;
+
+  SensorFusion(vector<double> maps_s, vector<double> maps_x, vector<double> maps_y) :
+          maps_s(maps_s), maps_x(maps_x), maps_y(maps_y) {
+  }
+
+  void add(vector<vector<double> > sensor_fusion, double dt_d) {
+    if (sensorData.size() < sensor_fusion.size()) {
+      sensorData.resize(sensor_fusion.size());
+    }
+
+
+
+    for (int i = 0; i < sensor_fusion.size(); ++i) {
+      double d = sensor_fusion[i][6];
+
+      if (d < 0.0 || 12.0 < d ) {
+//        cout << "clear for i = " << i << endl;
+        sensorData[i].clear();
+        continue;
+      }
+
+      // Remove all but track_n - 1 records
+//      cout << "erase elems ..." << endl;
+//      cout << "erasse sensorData[i].size() = " << sensorData[i].size() << endl;
+      while (sensorData[i].size() >= track_n ) {
+        sensorData[i].erase(sensorData[i].begin());
+      }
+
+      vector<double> sfd = sensor_fusion[i];
+
+      double x = sfd[1];
+      double y = sfd[2];
+      double vx = sfd[3];
+      double vy = sfd[4];
+      double s = sfd[5];
+//      double d = sfd[6];
+
+      double tt = 0.04;
+      double x1 = x + tt * vx;
+      double y1 = y + tt * vy;
+
+      auto sd1 = getFrenet(x1, y1, atan2(vy, vx), maps_x, maps_y);
+      double vs = (sd1[0] - s) / tt;
+      double vd = (sd1[1] - d) / tt;
+
+      sfd.push_back(vs);
+      sfd.push_back(vd);
+
+      // Add time
+      sfd.push_back(dt_d);
+      sensorData[i].push_back(sfd);
+    }
+
+    cout << "sf: cars = " << sensorData.size() << endl;
+    cout << "sf: steps = " << sensorData[0].size() << endl;
+
+  }
+
+//  vector<vector<double> > getCarHistory(int idx) {
+//    vector<vector<double> > history;
+//    if (sensorData.size() < idx) return history;
+//    return sensorData[idx];
+//  }
+
+  vector<vector<double> > getCarHistory(int idx) {
+    vector<vector<double> > history(7);
+    if (sensorData.size() < idx) return history;
+    double t = 0.0;
+    for (int i = 0; i < sensorData[idx].size(); ++i) {
+      history[0].push_back(sensorData[idx][i][1]); // x
+      history[1].push_back(sensorData[idx][i][2]); // y
+      history[2].push_back(sensorData[idx][i][5]); // s
+      history[3].push_back(sensorData[idx][i][6]); // d
+      history[4].push_back(sensorData[idx][i][7]); // vs
+      history[5].push_back(sensorData[idx][i][8]); // vd
+      if (i > 0) {
+        t += sensorData[idx][i][9]; // dt_d
+      }
+    }
+
+    t = -t;
+    for (int i = 0; i < sensorData[idx].size(); ++i) {
+      if (i > 0) {
+        t += sensorData[idx][i][9]; // dt_d
+      }
+//      cout << "push t = " << t << endl;
+      history[6].push_back(t); // t
+    }
+
+//    cout << "t = " << t << endl;
+
+    assert(t < abs(0.001));
+
+    return history;
+  }
+
+  vector<vector<vector<double> > > getAllCarHistory() {
+    vector<vector<vector<double> > > allHistory;
+    for (int i = 0; i < sensorData.size(); ++i) {
+      allHistory.push_back(getCarHistory(i));
+    }
+    return allHistory;
+  }
+
+  vector<double> getCarXY(int idx) {
+    return {0.0, 0.0};
+  }
+
+  bool isCarActive(int idx) {
+    if (sensorData.size() < idx) return false;
+    if (sensorData[idx].size() > 0) return true;
+    return false;
+  }
+
+  void print_car(int idx) {
+    auto car_data = sensorData[idx];
+    cout << "sf: car info [" << idx << "] : x, y, vx, vy, s, d" << endl;
+
+
+    for(int i = 0; i < car_data.size(); ++i) {
+      double x = car_data[i][1];
+      double y = car_data[i][2];
+      double vx = car_data[i][3];
+      double vy = car_data[i][4];
+      double s = car_data[i][5];
+      double d = car_data[i][6];
+      double dt_d = car_data[i][9];
+      cout << x << ", " << y << ", " << vx << ", " << vy << ", " << s << ", " << d << ", " << dt_d << endl;
+    }
+  }
+
+  vector<vector<double> > getTrajSD(int idx, double T = 5.0) {
+    auto car_data = getCarHistory(idx);
+
+    double s = car_data[2][car_data[2].size() - 1];
+    double d = car_data[3][car_data[3].size() - 1];
+
+    double vs = car_data[4][car_data[4].size() - 1];
+    double vd = car_data[5][car_data[5].size() - 1];
+
+    vector<double> SS;
+    vector<double> DD;
+    vector<double> TT;
+
+    if (car_data[0].size() < 1) {
+      return {SS, DD, TT};
+    }
+
+    double t = 0.0;
+    while ( t <= T) {
+      SS.push_back(s + t * vs);
+      DD.push_back(d + t * vd);
+      TT.push_back(t);
+      t += PATH_TIMESTEP;
+    }
+
+    /*
+    tk::spline splS;
+    splS.set_points(car_data[2], car_data[0]); // t, s
+
+    tk::spline splD;
+    splD.set_points(car_data[2], car_data[1]); // d, s
+
+    double t = 0.0;
+
+    while ( t <= T) {
+      SS.push_back(splS(t));
+      DD.push_back(splD(t));
+      TT.push_back(t);
+      t += PATH_TIMESTEP;
+    }
+     */
+
+    return {SS, DD, TT};
+
+  }
+
+  vector<vector<double> > getTrajXY(int idx, double T = 5.0) {
+
+    auto sd_traj = getTrajSD(idx, T);
+
+//    cout << "sd_traj.size = " << sd_traj[0].size() << endl;
+
+    auto xy_traj = getXY(sd_traj[0], sd_traj[1], maps_s, maps_x, maps_y);
+
+//    cout << "xy_traj.size = " << xy_traj[0].size() << endl;
+//    print_coeffs("xy[0] = ", xy_traj[0]);
+//    print_coeffs("xy[1] = ", xy_traj[1]);
+
+    return {xy_traj[0], xy_traj[1], sd_traj[2]};
+  }
+
+  int size() {return sensorData.size();}
+
+
+};
 
 
 

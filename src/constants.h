@@ -6,7 +6,7 @@
 #define PATH_PLANNING_CONSTANTS_H
 
 // Activates local execution with graphs (need matplotlib in include)
-int LOCAL = 0;
+int LOCAL = 1;
 
 
 #define PATH_TIMESTEP 0.02  // 50 Hz - rate for final path
