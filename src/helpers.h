@@ -757,42 +757,6 @@ vector<double> traj_stats_jerk(Trajectory traj) {
 }
 
 
-Trajectory genTraj(double tLane, double tSpeed, vector<double> s_start, vector<double> d_start, double T = 5.0) {
-
-  double end_d = (2.0 + 4.0 * tLane);
-
-  double avg_v = distance(0.0, 0.0, s_start[1], d_start[1]);
-  avg_v = avg_v + distance(0.0, 0.0, tSpeed, 0.0);
-  avg_v = avg_v/2;
-
-  double travel_dist = avg_v * T;
-
-
-  double delta_d = end_d - d_start[0];
-  double s_dist = sqrt(travel_dist * travel_dist - delta_d * delta_d);
-
-
-  vector<double> s_end = {s_start[0] + s_dist, tSpeed, 0.0}; // {car_s+100, 15, 0};
-  vector<double> d_end = {end_d, 0.0, 0.0};
-
-
-
-  cout << "s_dist = " << s_dist << endl;
-  cout << "avg_v = " << avg_v << endl;
-
-  print_coeffs("s_start = ", s_start);
-  print_coeffs("d_start = ", d_start);
-  print_coeffs("s_end = ", s_end);
-  print_coeffs("d_end = ", d_end);
-
-  cout << "T = " << T << endl;
-
-  auto traj = getJMT(s_start, s_end, d_start, d_end, T);
-
-  return traj;
-
-
-}
 
 
 
@@ -834,6 +798,8 @@ public:
 
       vector<double> sfd = sensor_fusion[i];
 
+//      print_coeffs("car :", sfd);
+
       double x = sfd[1];
       double y = sfd[2];
       double vx = sfd[3];
@@ -845,9 +811,24 @@ public:
       double x1 = x + tt * vx;
       double y1 = y + tt * vy;
 
+//      cout << "x1,y1 =" << x1 << ", " << y1 << endl;
+
+
+
+      auto sd = getFrenet(x, y, atan2(vy, vx), maps_x, maps_y);
       auto sd1 = getFrenet(x1, y1, atan2(vy, vx), maps_x, maps_y);
-      double vs = (sd1[0] - s) / tt;
-      double vd = (sd1[1] - d) / tt;
+
+      double Dxy = distance(x, y, x1, y1);
+      double Dsd = distance(s, d, sd1[0], sd1[1]);
+
+      double vs = (sd1[0] - s) * (Dxy/Dsd) / tt;
+      double vd = (sd1[1] - d) * (Dxy/Dsd) / tt;
+
+//      print_coeffs("sd = ", sd);
+//      print_coeffs("sd1 = ", sd1);
+//      cout << "xy dist = " << distance(x, y, x1, y1) << endl;
+//      cout << "sd dist = " << distance(s, d, sd1[0], sd1[1]) << endl;
+//      cout << "[ - " << i << " - ] vs,vd = " << vs << ", " << vd << endl;
 
       sfd.push_back(vs);
       sfd.push_back(vd);
@@ -857,8 +838,8 @@ public:
       sensorData[i].push_back(sfd);
     }
 
-    cout << "sf: cars = " << sensorData.size() << endl;
-    cout << "sf: steps = " << sensorData[0].size() << endl;
+//    cout << "sf: cars = " << sensorData.size() << endl;
+//    cout << "sf: steps = " << sensorData[0].size() << endl;
 
   }
 
@@ -996,10 +977,98 @@ public:
     return {xy_traj[0], xy_traj[1], sd_traj[2]};
   }
 
+  vector<double> getClosestCar(double car_s, double car_d, int lane) const {
+    double lane_d = LANE_WIDTH * (0.5 + lane);
+    double lane_dl = LANE_WIDTH * (lane); // left edge
+    double lane_dr = LANE_WIDTH * (1 + lane); // right edge
+
+    double min_s = 100000;
+    int min_i = -1;
+    for (int i = 0; i < sensorData.size(); ++i) {
+      if (sensorData[i].size() > 0) {
+        auto last_data = sensorData[i].back();
+        double d = last_data[6];
+        if (lane_dl < d && d < lane_dr) {
+          double s = last_data[5];
+          if (s > car_s && s < min_s) {
+            min_s = s;
+            min_i = i;
+          }
+        }
+      }
+    }
+
+    if (min_i < 0) return {};
+
+    return sensorData[min_i].back();
+
+
+  }
+
   int size() {return sensorData.size();}
 
 
 };
+
+
+Trajectory genTraj(double tLane, double tSpeed, vector<double> s_start, vector<double> d_start, const SensorFusion& sf, double T = 5.0) {
+
+  auto f_car = sf.getClosestCar(s_start[0], d_start[0], tLane);
+  if (!f_car.empty()) {
+    print_coeffs("CLOSEST car = ", f_car);
+    double f_car_dist = (f_car[5] - s_start[0]);
+    cout << "dist to car = " << f_car_dist << endl;
+
+    if (3 * CAR_LENGTH < f_car_dist && f_car_dist < 5 * CAR_LENGTH) {
+      tSpeed = min(f_car[7], SPEED_LIMIT);
+      T = 3.0;
+      cout << "NEW SPEED 3-5: = " << tSpeed << endl;
+    } else if (f_car_dist < 3 * CAR_LENGTH) {
+      tSpeed = min(f_car[7] * 0.9, SPEED_LIMIT);
+      T = 3.0;
+      cout << "NEW SPEED 0-3: = " << tSpeed << endl;
+    }
+  }
+
+  double end_d = (2.0 + 4.0 * tLane);
+
+  double avg_v = distance(0.0, 0.0, s_start[1], d_start[1]);
+  avg_v = avg_v + distance(0.0, 0.0, tSpeed, 0.0);
+  avg_v = avg_v/2;
+
+  double travel_dist = avg_v * T;
+
+
+  double delta_d = end_d - d_start[0];
+  double s_dist = sqrt(travel_dist * travel_dist - delta_d * delta_d);
+
+
+  // Check for the car and if needed change s_dist AND T
+
+
+
+  vector<double> s_end = {s_start[0] + s_dist, tSpeed, 0.0}; // {car_s+100, 15, 0};
+  vector<double> d_end = {end_d, 0.0, 0.0};
+
+
+
+  cout << "s_dist = " << s_dist << endl;
+  cout << "avg_v = " << avg_v << endl;
+
+  print_coeffs("s_start = ", s_start);
+  print_coeffs("d_start = ", d_start);
+  print_coeffs("s_end = ", s_end);
+  print_coeffs("d_end = ", d_end);
+
+  cout << "T = " << T << endl;
+
+  auto traj = getJMT(s_start, s_end, d_start, d_end, T);
+
+  return traj;
+
+
+}
+
 
 
 

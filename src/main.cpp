@@ -47,6 +47,8 @@ int main() {
   // Handler State
   HandlerState hState;
 
+
+
   // Waypoint map to read from
   string map_file_ = "../data/highway_map.csv";
   // The max s value before wrapping around the track back to 0
@@ -75,10 +77,11 @@ int main() {
   }
 
 
+  SensorFusion sf(map_waypoints_s, map_waypoints_x, map_waypoints_y);
 
 
 
-  h.onMessage([&hState,&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy](uWS::WebSocket<uWS::SERVER> *ws, char *data, size_t length,
+  h.onMessage([&sf,&hState,&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy](uWS::WebSocket<uWS::SERVER> *ws, char *data, size_t length,
                      uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
@@ -191,6 +194,10 @@ int main() {
           cout << "acc = " << hState.acc << endl;
 
 
+          // Add data to sensor fusion
+          sf.add(sensor_fusion, dt_d);
+
+
           // Get start_s and start_d params
             // Check prev_path
             // Check prev_traj
@@ -244,7 +251,7 @@ int main() {
           print_coeffs("FINAL s_start = ", s_start);
           print_coeffs("FINAL d_start = ", d_start);
 
-          auto traj = genTraj(targetLane, targetSpeed, s_start, d_start);
+          auto traj = genTraj(targetLane, targetSpeed, s_start, d_start, sf);
 
 /*
           // Make a straight line trajectory

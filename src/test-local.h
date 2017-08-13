@@ -44,8 +44,8 @@ void testTrajectoriesGen(vector<double> maps_s, vector<double> maps_x, vector<do
 
   cout << "read from logFile " << j.size() << " lines" << endl;
 
-  unsigned long start = 50; //154 (1046, 873)
-  unsigned long end = start + 100; //j.size();
+  unsigned long start = 300; //154 (1046, 873)
+  unsigned long end = start + 10; //j.size();
 
 
   double targetSpeed = 49.5 * 1609.344 / 3600.0;
@@ -158,11 +158,11 @@ void testTrajectoriesGen(vector<double> maps_s, vector<double> maps_x, vector<do
 
 
       // Show
-      print_coeffs("s = ", all_car_xy[j][2]);
-      print_coeffs("d = ", all_car_xy[j][3]);
-      print_coeffs("vs = ", all_car_xy[j][4]);
-      print_coeffs("vd = ", all_car_xy[j][5]);
-      print_coeffs("T = ", all_car_xy[j][6]);
+//      print_coeffs("s = ", all_car_xy[j][2]);
+//      print_coeffs("d = ", all_car_xy[j][3]);
+//      print_coeffs("vs = ", all_car_xy[j][4]);
+//      print_coeffs("vd = ", all_car_xy[j][5]);
+//      print_coeffs("T = ", all_car_xy[j][6]);
 
       // Get Trajectory XY for car
       auto ct = sf.getTrajXY(j, 0.02 * 50);
@@ -218,12 +218,12 @@ void testTrajectoriesGen(vector<double> maps_s, vector<double> maps_x, vector<do
 
 
     // Input
-    vector<double> s_start = {car_s, 0, 0.0}; // {car_s, car_speed, 0};
-    vector<double> d_start = {6.0, 0.0, 0.0};
+    vector<double> s_start = {end_path_s, car_speed, 0.0}; // {car_s, car_speed, 0};
+    vector<double> d_start = {end_path_d, 0.0, 0.0};
     double tSpeed = 22.0;
     int tLane = 1;
 
-    auto traj = genTraj(tLane, tSpeed, s_start, d_start);
+    auto traj = genTraj(tLane, tSpeed, s_start, d_start, sf);
 
     cout << "traj = " << traj.str() << endl;
 
