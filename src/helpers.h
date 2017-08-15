@@ -295,6 +295,8 @@ vector<vector<double> > getXY(vector<double> ss, vector<double> dd, vector<doubl
   vector<double> prev_xy;
   for (int i = 0; i < ss.size(); ++i) {
     vector<double> xy = getXY(ss[i], dd[i], maps_s, maps_x, maps_y);
+
+/*
     if (adjust && i > 0) {
       // adjust next point to be on the same dist as s,d points
       double Dsd = distance(ss[i-1], dd[i-1], ss[i], dd[i]);
@@ -305,10 +307,30 @@ vector<vector<double> > getXY(vector<double> ss, vector<double> dd, vector<doubl
       xy[0] = prev_xy[0] + dx;
       xy[1] = prev_xy[1] + dy;
     }
+*/
+
     xx.push_back(xy[0]);
     yy.push_back(xy[1]);
     prev_xy = xy;
   }
+
+
+  unsigned long n = 15;
+  double prev_x = xx[0];
+  double prev_y = yy[0];
+  for (int i = 1; i < xx.size(); ++i) {
+    int next_idx = min(i + n, xx.size() - 1);
+    double Dsd = distance(ss[i-1], dd[i-1], ss[i], dd[i]);
+    double Dxy = distance(prev_x, prev_y, xx[next_idx], yy[next_idx]);
+//      cout << "ratio: " << Dsd/Dxy << endl;
+    double dx = (xx[next_idx] - prev_x) * (Dsd/Dxy);
+    double dy = (yy[next_idx] - prev_y) * (Dsd/Dxy);
+    xx[i] = prev_x + dx;
+    yy[i] = prev_y + dy;
+    prev_x = xx[i];
+    prev_y = yy[i];
+  }
+
 
   return {xx, yy};
 }
@@ -316,12 +338,25 @@ vector<vector<double> > getXY(vector<double> ss, vector<double> dd, vector<doubl
 
 vector<vector<double> > getXYPath(vector<double> ss, vector<double> dd, vector<double> tt, vector<double> maps_s, vector<double> maps_x, vector<double> maps_y) {
 
-  auto xy = getXY(ss, dd, maps_s, maps_x, maps_y);
+  auto xy = getXY(ss, dd, maps_s, maps_x, maps_y, true); // TDOO: test remove
 
 //            next_x_vals = xy[0];
 //            next_y_vals = xy[1];
 
+  // Laplassian smooth algorithms
+//  int rounds = 1;
+//  while (rounds > 0) {
+//    for (int j = 1; j < xy[0].size() - 1; ++j) {
+//      xy[0][j] = 0.5 * (xy[0][j - 1] + xy[0][j + 1]);
+//      xy[1][j] = 0.5 * (xy[1][j - 1] + xy[1][j + 1]);
+//    }
+//    --rounds;
+//  }
 
+
+//  return {xy[0], xy[1], ss, dd};
+
+  /* TODO: test remove */
   //double T = ss.size() * timestep;
   double T = tt[tt.size() - 1];
 
@@ -331,12 +366,30 @@ vector<vector<double> > getXYPath(vector<double> ss, vector<double> dd, vector<d
 //    TT.push_back((double)i * timestep);
 //  }
 
+  vector<double> fitX;
+  vector<double> fitY;
+  vector<double> fitT;
+
+  unsigned long i = 0;
+  unsigned long N = xy[0].size();
+  while (i < N) {
+    fitX.push_back(xy[0][i]);
+    fitY.push_back(xy[1][i]);
+    fitT.push_back(i*PATH_TIMESTEP);
+    if (i < N - 1) {
+      i = min(i + 15, N - 1);
+    } else {
+      break; // or ++i :), Looks weird ....
+    }
+  }
+
+
   // Spline Smoothing XY line
   tk::spline splX;
-  splX.set_points(tt, xy[0]);
+  splX.set_points(fitT, fitX); // tt, xy[0]
 
   tk::spline splY;
-  splY.set_points(tt, xy[1]);
+  splY.set_points(fitT, fitY); // xy[1]
 
   vector<double> XX_smooth;
   vector<double> YY_smooth;
@@ -352,7 +405,8 @@ vector<vector<double> > getXYPath(vector<double> ss, vector<double> dd, vector<d
 
 //  cout << "smooth_TT[0] = " << TT[0] << ", smooth_TT[end] = " << TT[TT.size()-1] << endl;
 
-  return {XX_smooth, YY_smooth, TT};
+  return {XX_smooth, YY_smooth, TT, xy[0], xy[1]};
+
 
 }
 
@@ -499,7 +553,7 @@ vector<double> getTT(double timestep, int num) {
 
 double findTimeInTrajByXY(Trajectory traj, double car_x, double car_y, double car_yaw, vector<double> maps_s, vector<double> maps_x, vector<double> maps_y) {
 
-  auto traj_data = getSDbyTraj(traj, TRAJ_TIMESTEP);
+  auto traj_data = getSDbyTraj(traj, PATH_TIMESTEP /*TRAJ_TIMESTEP*/);
   auto xy = getXYPath(traj_data[0], traj_data[1], traj_data[2], maps_s, maps_x, maps_y);
 
 //  cout << "findTime: xy = " << endl;
@@ -527,7 +581,7 @@ double findTimeInTrajByXY(Trajectory traj, double car_x, double car_y, double ca
 
 vector<vector<double> > getXYPathFromTraj(Trajectory traj, vector<double> maps_s, vector<double> maps_x, vector<double> maps_y, double timeShift = 0.0) {
 
-  auto traj_data = getSDbyTraj(traj, TRAJ_TIMESTEP * 2 /*, timeShift*/); // s,d,t
+  auto traj_data = getSDbyTraj(traj, PATH_TIMESTEP /*TRAJ_TIMESTEP * 2 */ /*, timeShift*/); // s,d,t
 //  cout << "traj_data.size = " << traj_data[0].size() << endl;
 //  cout << "traj_data[0] = " << traj_data[2][0] << ", " << traj_data[2][traj_data[2].size()-1] << endl;
 
@@ -556,6 +610,7 @@ vector<vector<double> > getXYPathConnected(vector<double> prev_x, vector<double>
 
   auto xy_traj = getXYPathFromTraj(traj, maps_s, maps_x, maps_y, timeShift);
 
+  // Connect to previous path
   if (prev_x.size() > 0) {
     int last_idx = prev_x.size() - 1;
     double disp_x = prev_x[last_idx] - xy_traj[0][0];
@@ -567,7 +622,7 @@ vector<vector<double> > getXYPathConnected(vector<double> prev_x, vector<double>
     }
   }
 
-  return {xy_traj[0], xy_traj[1]};
+  return xy_traj;
 
 
 //  vector<double> xx_n;
@@ -1031,26 +1086,36 @@ public:
 };
 
 
-Trajectory genTraj(double tLane, double tSpeed, vector<double> s_start, vector<double> d_start, const SensorFusion& sf, double T = 5.0) {
+Trajectory genTraj(double tLane, double tSpeed, double car_s, double car_d, vector<double> s_start, vector<double> d_start, const SensorFusion& sf, double T = 4.0) {
 
-  auto f_car = sf.getClosestCar(s_start[0], d_start[0], tLane);
+  // TODO: Check for car between my car and end_path point
+  auto f_car = sf.getClosestCar(car_s, car_d, tLane);
+  double prev_dist = s_start[0] - car_s;
   if (!f_car.empty()) {
     print_coeffs("CLOSEST car = ", f_car);
     double f_car_dist = (f_car[5] - s_start[0]);
     cout << "dist to car = " << f_car_dist << endl;
 
-    if (3 * CAR_LENGTH < f_car_dist && f_car_dist < 5 * CAR_LENGTH) {
-      tSpeed = min(f_car[7], tSpeed);
+    if (f_car_dist < 0) {
+      // Car between our car end of prev path: SLOW DOWN
+      tSpeed = min(f_car[7] * 0.7, tSpeed);
       T = 3.0;
-      cout << "NEW SPEED 3-5: = " << tSpeed << endl;
     } else if (f_car_dist < 3 * CAR_LENGTH) {
       tSpeed = min(f_car[7] * 0.9, tSpeed);
       T = 3.0;
       cout << "NEW SPEED 0-3: = " << tSpeed << endl;
+    } else if (f_car_dist < 7 * CAR_LENGTH) {
+      tSpeed = min(f_car[7], tSpeed);
+      T = 3.0;
+      cout << "NEW SPEED 3-5: = " << tSpeed << endl;
     }
   }
 
-  double end_d = (2.0 + 4.0 * tLane);
+  double end_d = (2.1 + LANE_WIDTH * tLane);
+
+  double delta_v = abs(tSpeed - s_start[1]);
+
+  T = max(delta_v / 4.5, 3.0); // 5 m/s per second but not less than 3s
 
   double avg_v = distance(0.0, 0.0, s_start[1], d_start[1]);
   avg_v = avg_v + distance(0.0, 0.0, tSpeed, 0.0);

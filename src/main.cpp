@@ -232,7 +232,7 @@ int main() {
             print_coeffs("curr_d = ", {curr_d, curr_d_v, curr_d_a});
 
 //            s_start[0] = curr_s;
-            double alpha = 0.1;
+            double alpha = 0.5;
             s_start[0] = end_path_s * alpha + curr_s * (1 - alpha);
 
             s_start[1] = curr_s_v;
@@ -295,7 +295,7 @@ int main() {
 
 
 
-          auto traj = genTraj(targetLane, targetSpeed, s_start, d_start, sf);
+          auto traj = genTraj(targetLane, targetSpeed, car_s, car_d, s_start, d_start, sf);
 
 
 /*
@@ -534,8 +534,8 @@ int main() {
     // Test on local data
 //    testLocal(TEST_JSON_1, map_waypoints_s, map_waypoints_x, map_waypoints_y);
 //    testLocalStored(map_waypoints_s, map_waypoints_x, map_waypoints_y);
-//    testLocalTrajectories(map_waypoints_s, map_waypoints_x, map_waypoints_y);
-    testTrajectoriesGen(map_waypoints_s, map_waypoints_x, map_waypoints_y);
+    testLocalTrajectories(map_waypoints_s, map_waypoints_x, map_waypoints_y);
+//    testTrajectoriesGen(map_waypoints_s, map_waypoints_x, map_waypoints_y);
   } else {
     prepare_log();
 

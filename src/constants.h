@@ -17,7 +17,7 @@ int LOCAL = 0;
 
 #define LANE_WIDTH 4.0
 
-#define SPEED_LIMIT 22.12 // m/s = 49.5 * 1609.344 / 3600
+#define SPEED_LIMIT 21.0 // 22.12 // m/s = 49.5 * 1609.344 / 3600
 
 double METERS_PER_MILE = 1609.344;
 

@@ -44,7 +44,7 @@ void testTrajectoriesGen(vector<double> maps_s, vector<double> maps_x, vector<do
 
   cout << "read from logFile " << j.size() << " lines" << endl;
 
-  unsigned long start = 300; //154 (1046, 873)
+  unsigned long start = 100; //154 (1046, 873)
   unsigned long end = start + 10; //j.size();
 
 
@@ -223,7 +223,7 @@ void testTrajectoriesGen(vector<double> maps_s, vector<double> maps_x, vector<do
     double tSpeed = 22.0;
     int tLane = 1;
 
-    auto traj = genTraj(tLane, tSpeed, s_start, d_start, sf);
+    auto traj = genTraj(tLane, tSpeed, car_s, car_d, s_start, d_start, sf);
 
     cout << "traj = " << traj.str() << endl;
 
@@ -370,8 +370,8 @@ void testLocalTrajectories(vector<double> maps_s, vector<double> maps_x, vector<
 
   cout << "read from logFile " << j.size() << " lines" << endl;
 
-  unsigned long start = 0; //154 (1046, 873)
-  unsigned long end = j.size();
+  unsigned long start = 10875; //413; //154 (1046, 873)
+  unsigned long end = start + 150; // j.size();
 
   bool plot_first = true;
   int plot_first_max = 1;
@@ -469,7 +469,7 @@ void testLocalTrajectories(vector<double> maps_s, vector<double> maps_x, vector<
 
 
     // Next Values
-//    plt::plot(next_x_vals, next_y_vals, "bo");
+    plt::plot(next_x_vals, next_y_vals, "bo");
 
 
 
@@ -477,8 +477,8 @@ void testLocalTrajectories(vector<double> maps_s, vector<double> maps_x, vector<
 
 
 
-//    plt::ylim(car_y - 0.5, car_y + 1);
-//    plt::xlim(car_x - 0.5, car_x + 1);
+//    plt::ylim(car_y - 0.5, car_y + 3);
+//    plt::xlim(car_x - 1, car_x + 22);
     plt::grid(true);
 
 
@@ -486,22 +486,61 @@ void testLocalTrajectories(vector<double> maps_s, vector<double> maps_x, vector<
 //    plt::plot(xy[0], xy[1], "bo");
 
     // Prev points
-//    plt::plot(prev_x, prev_y, "rv");
-
-
-//    if (prev_x.size() > 0) {
-//      auto xy_conn = getXYPathConnected(prev_x, prev_y, car_traj, maps_s, maps_x, maps_y);
-//      plt::plot(xy_conn[0], xy_conn[1], "g>");
-//    }
+//    plt::plot(prev_x, prev_y, "ro");
+    plt::annotate("END", prev_x[prev_x.size()-1], prev_y[prev_x.size()-1]);
 
 
 
+    if (prev_x.size() > 0) {
+      auto xy_conn = getXYPathConnected(prev_x, prev_y, car_traj, maps_s, maps_x, maps_y);
+
+//      auto traj_data = getSDbyTraj(car_traj, PATH_TIMESTEP /*TRAJ_TIMESTEP * 2 */ /*, timeShift*/);
+//      auto xy_conn = getXYPath(traj_data[0], traj_data[1], traj_data[2], maps_s, maps_x, maps_y);
+//      vector<double> tt = getTT(PATH_TIMESTEP, xy_conn[0].size());
+
+//      plt::figure();
+//      plt::plot(xy_conn[0], xy_conn[1], "b*");
 
 
+      // Laplassian smooth algorithms
+//      int rounds = 10;
+//      while (rounds > 0) {
+//        for (int j = 1; j < xy_conn[0].size() - 1; ++j) {
+//          xy_conn[0][j] = 0.5 * (xy_conn[0][j - 1] + xy_conn[0][j + 1]);
+//          xy_conn[1][j] = 0.5 * (xy_conn[1][j - 1] + xy_conn[1][j + 1]);
+//        }
+//        --rounds;
+//      }
+
+//      plt::plot(xy_conn[0], xy_conn[1], "rs");
+//      plt::show();
+
+//      plt::subplot(4,1,1);
+//      plt::plot(tt, xy_conn[2], "ro");
+//      plt::subplot(4,1,2);
+//      plt::plot(tt, xy_conn[3], "ro");
+//      plt::subplot(4,1,3);
+//      plt::plot(tt, xy_conn[0], "bo");
+//      plt::subplot(4,1,4);
+//      plt::plot(tt, xy_conn[1], "bo");
+//      plt::show();
+
+//      auto xy_conn = getXYPathFromTraj(car_traj, maps_s, maps_x, maps_y);
+
+
+      plt::plot(xy_conn[0], xy_conn[1], "g>");
+
+//      plt::plot(xy_conn[3], xy_conn[4], "yo");
+    }
+
+
+
+
+    plt::show();
 
   }
 
-  plt::show();
+
 
 
 
