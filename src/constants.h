@@ -19,7 +19,10 @@ int LOCAL = 0;
 
 #define SPEED_LIMIT 21.0 // 22.12 // m/s = 49.5 * 1609.344 / 3600
 
+#define MAX_POINTS 50
+
 double METERS_PER_MILE = 1609.344;
+
 
 
 #endif //PATH_PLANNING_CONSTANTS_H

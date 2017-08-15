@@ -1088,26 +1088,30 @@ public:
 
 Trajectory genTraj(double tLane, double tSpeed, double car_s, double car_d, vector<double> s_start, vector<double> d_start, const SensorFusion& sf, double T = 4.0) {
 
+  if (car_s > s_start[0] || s_start[0] - car_s > 1.5 * MAX_POINTS * PATH_TIMESTEP * SPEED_LIMIT) {
+    cout << "GEN TRAJ: LOOP ENDS!!!!!!" << endl;
+  }
+
   // TODO: Check for car between my car and end_path point
   auto f_car = sf.getClosestCar(car_s, car_d, tLane);
   double prev_dist = s_start[0] - car_s;
   if (!f_car.empty()) {
-    print_coeffs("CLOSEST car = ", f_car);
+//    print_coeffs("CLOSEST car = ", f_car);
     double f_car_dist = (f_car[5] - s_start[0]);
-    cout << "dist to car = " << f_car_dist << endl;
+//    cout << "dist to car = " << f_car_dist << endl;
 
     if (f_car_dist < 0) {
       // Car between our car end of prev path: SLOW DOWN
-      tSpeed = min(f_car[7] * 0.7, tSpeed);
+      tSpeed = min(f_car[7] * 0.5, tSpeed);
       T = 3.0;
     } else if (f_car_dist < 3 * CAR_LENGTH) {
-      tSpeed = min(f_car[7] * 0.9, tSpeed);
+      tSpeed = min(f_car[7] * 0.7, tSpeed);
       T = 3.0;
-      cout << "NEW SPEED 0-3: = " << tSpeed << endl;
+//      cout << "NEW SPEED 0-3: = " << tSpeed << endl;
     } else if (f_car_dist < 7 * CAR_LENGTH) {
       tSpeed = min(f_car[7], tSpeed);
       T = 3.0;
-      cout << "NEW SPEED 3-5: = " << tSpeed << endl;
+//      cout << "NEW SPEED 3-5: = " << tSpeed << endl;
     }
   }
 
@@ -1137,15 +1141,15 @@ Trajectory genTraj(double tLane, double tSpeed, double car_s, double car_d, vect
 
 
 
-  cout << "s_dist = " << s_dist << endl;
-  cout << "avg_v = " << avg_v << endl;
+//  cout << "s_dist = " << s_dist << endl;
+//  cout << "avg_v = " << avg_v << endl;
 
-  print_coeffs("s_start = ", s_start);
-  print_coeffs("d_start = ", d_start);
-  print_coeffs("s_end = ", s_end);
-  print_coeffs("d_end = ", d_end);
-
-  cout << "T = " << T << endl;
+//  print_coeffs("s_start = ", s_start);
+//  print_coeffs("d_start = ", d_start);
+//  print_coeffs("s_end = ", s_end);
+//  print_coeffs("d_end = ", d_end);
+//
+//  cout << "T = " << T << endl;
 
   auto traj = getJMT(s_start, s_end, d_start, d_end, T);
 

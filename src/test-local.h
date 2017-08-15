@@ -370,7 +370,7 @@ void testLocalTrajectories(vector<double> maps_s, vector<double> maps_x, vector<
 
   cout << "read from logFile " << j.size() << " lines" << endl;
 
-  unsigned long start = 10875; //413; //154 (1046, 873)
+  unsigned long start = 10200; //413; //154 (1046, 873)
   unsigned long end = start + 150; // j.size();
 
   bool plot_first = true;

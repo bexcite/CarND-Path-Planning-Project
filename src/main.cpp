@@ -190,9 +190,9 @@ int main() {
           cout << "car_speed = " << car_speed << "( " << car_speed_m << ", target = " << targetSpeed << " )" << endl;
           cout << "s,d = " << car_s << ", " << car_d << endl;
           cout << "end_path s,d = " << end_path_s << ", " << end_path_d << endl;
-          cout << "end_path x,y,yaw = " << end_path_x << ", " << end_path_y << ", " << end_path_yaw << endl;
+//          cout << "end_path x,y,yaw = " << end_path_x << ", " << end_path_y << ", " << end_path_yaw << endl;
           cout << "prev_path.size = " << previous_path_x.size() << endl;
-          cout << "acc = " << hState.acc << endl;
+//          cout << "acc = " << hState.acc << endl;
 
 
           // Add data to sensor fusion
@@ -224,12 +224,12 @@ int main() {
             curr_s = poly_calc(hState.prev_traj.s_coeffs, curr_time, 0);
             curr_s_v = poly_calc(hState.prev_traj.s_coeffs, curr_time, 1);
             curr_s_a = poly_calc(hState.prev_traj.s_coeffs, curr_time, 2);
-            print_coeffs("curr_s = ", {curr_s, curr_s_v, curr_s_a});
+//            print_coeffs("curr_s = ", {curr_s, curr_s_v, curr_s_a});
 
             curr_d = poly_calc(hState.prev_traj.d_coeffs, curr_time, 0);
             curr_d_v = poly_calc(hState.prev_traj.d_coeffs, curr_time, 1);
             curr_d_a = poly_calc(hState.prev_traj.d_coeffs, curr_time, 2);
-            print_coeffs("curr_d = ", {curr_d, curr_d_v, curr_d_a});
+//            print_coeffs("curr_d = ", {curr_d, curr_d_v, curr_d_a});
 
 //            s_start[0] = curr_s;
             double alpha = 0.5;
@@ -276,12 +276,12 @@ int main() {
             for (int i = 0; i < adj_lanes.size(); ++i) {
               int lc = adj_lanes[i];
               auto lc_data = sf.estimateLane(lc, car_s, car_d, s_start[0], d_start[0]);
-              cout << "eval lane L" << lc << endl;
-              print_coeffs("lc_data = ", lc_data);
+//              cout << "eval lane L" << lc << endl;
+//              print_coeffs("lc_data = ", lc_data);
 
 
               if (!lc_data.empty() && lc_data[1] > planned_speed + 3) {
-                cout << "select line candidate " << lc << endl;
+//                cout << "select line candidate " << lc << endl;
                 targetLane = lc;
                 planned_speed = lc_data[1];
                 targetSpeed = planned_speed;
@@ -293,7 +293,15 @@ int main() {
           cout << "TARGET: Lane = " << targetLane << ", " << targetSpeed << endl;
 
 
+          bool loop_ends = false;
 
+
+          if (car_s > s_start[0] || s_start[0] - car_s > 1.5 * MAX_POINTS * PATH_TIMESTEP * SPEED_LIMIT) {
+            cout << "LOOP ENDS!!!!!!" << endl;
+            loop_ends = true;
+            s_start[0] = end_path_s;
+            d_start[0] = end_path_d;
+          }
 
           auto traj = genTraj(targetLane, targetSpeed, car_s, car_d, s_start, d_start, sf);
 
@@ -321,8 +329,8 @@ int main() {
 
           auto acc_stats = traj_stats_acc(traj);
           auto j_stats = traj_stats_jerk(traj);
-          cout << "acc_per_sec = " << acc_stats[0] << ", max_acc = " << acc_stats[1] << endl;
-          cout << "jerk_per_sec = " << j_stats[0] << ", max_jerk = " << j_stats[1] << endl;
+//          cout << "acc_per_sec = " << acc_stats[0] << ", max_acc = " << acc_stats[1] << endl;
+//          cout << "jerk_per_sec = " << j_stats[0] << ", max_jerk = " << j_stats[1] << endl;
 
 //          cout << "TRAJ: " << traj.str() << endl;
 
@@ -334,7 +342,7 @@ int main() {
 
             if (previous_path_x.size() >= maxPoints) {
 
-              cout << "[] just copy all" << endl;
+//              cout << "[] just copy all" << endl;
 
               // copy previous
               for (int i = 0; i < previous_path_x.size(); ++i) {
@@ -347,7 +355,7 @@ int main() {
             } else {
               // Less than maxPoints
 
-              cout << "[] less than maxPoints" << endl;
+//              cout << "[] less than maxPoints" << endl;
 
               // first copy previous points
               for (int i = 0; i < previous_path_x.size(); ++i) {
@@ -361,9 +369,9 @@ int main() {
 //              cout << "gamble = " << gamble << endl;
 
               // second check existing path points in stash
-              if (have_stash && gamble < 0.0) {
+              if (have_stash && loop_ends) {
 
-                cout << "[] have points on stash - use them" << endl;
+                cout << "[] have points on stash AND LOOP ENDs - use existing points them" << endl;
 
                 int prev_next_idx = hState.prev_next_idx;
 
@@ -376,12 +384,16 @@ int main() {
 
                 hState.prev_next_idx = prev_next_idx;
 
+                cout << "stash total = " << hState.prev_xy[0].size() << endl;
+                cout << "stash idx = " << hState.prev_next_idx << endl;
+                cout << "stash traj = " << hState.prev_traj.str() << endl;
+
                 add_to_log(hState.dt, dt_d, car_x, car_y, car_yaw, car_s, car_d, car_speed_m, hState.prev_traj, hState.prev_xy[0], hState.prev_xy[1], hState.prev_next_idx, previous_path_x, previous_path_y, end_path_s, end_path_d, next_x_vals, next_y_vals, sensor_fusion);
 
               } else {
                 // Use new trajectory
 
-                cout << "[] using new trajectory" << endl;
+//                cout << "[] using new trajectory" << endl;
 
                 xy = getXYPathConnected(previous_path_x, previous_path_y, traj, map_waypoints_s, map_waypoints_x, map_waypoints_y);
 
@@ -411,7 +423,7 @@ int main() {
           } else {
             // First trajectory
 
-            cout << "[] first trajectory" << endl;
+//            cout << "[] first trajectory" << endl;
 
             xy = getXYPathFromTraj(traj, map_waypoints_s, map_waypoints_x, map_waypoints_y);
 
@@ -436,10 +448,10 @@ int main() {
           }
 
 
-          if (hState.path) {
-            cout << "stashed prev_xy.size = " << hState.prev_xy[0].size() << endl;
-            cout << "stashed prev_next_idx = " << hState.prev_next_idx << endl;
-          }
+//          if (hState.path) {
+//            cout << "stashed prev_xy.size = " << hState.prev_xy[0].size() << endl;
+//            cout << "stashed prev_next_idx = " << hState.prev_next_idx << endl;
+//          }
 
 
 
