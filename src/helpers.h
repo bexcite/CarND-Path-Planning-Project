@@ -685,6 +685,196 @@ vector<vector<double> > getXYPathConnected(vector<double> prev_x, vector<double>
 }
 
 
+vector<vector<double> > getXYPathConnected1(vector<double> prev_x, vector<double> prev_y, double car_x, double car_y, double car_yaw, Trajectory traj, vector<double> maps_s, vector<double> maps_x, vector<double> maps_y, double timeShift = 0.0) {
+
+
+  auto traj_data = getSDbyTraj(traj, PATH_TIMESTEP); // s,d,t
+
+  vector<double> ss = traj_data[0];
+  vector<double> dd = traj_data[1];
+  vector<double> tt = traj_data[2];
+
+  vector<double> fitX;
+  vector<double> fitY;
+  vector<double> fitT;
+
+  unsigned long prev_size = prev_x.size();
+  unsigned long traj_size = ss.size();
+
+  double start_x;
+  double end_x;
+
+//  cout << ")) 1" << endl;
+
+  if (prev_size > 0) {
+    start_x = prev_x[0];
+    fitX.push_back(prev_x[0]);
+    fitY.push_back(prev_y[0]);
+    double temp_t = -1 * (double)(prev_size*PATH_TIMESTEP);
+    cout << "temp_t = " << temp_t << endl;
+    fitT.push_back(temp_t);
+  }
+
+  if (prev_size > 2) {
+//    cout << ")) 2" << endl;
+    fitX.push_back(prev_x[(int)prev_size/2]);
+    fitY.push_back(prev_y[(int)prev_size/2]);
+    double temp_t = -1 * (double)((prev_size-(int)prev_size/2)*PATH_TIMESTEP);
+    cout << "temp_t = " << temp_t << endl;
+    fitT.push_back(temp_t);
+  }
+
+  if (prev_size > 3) {
+    fitX.push_back(prev_x[prev_size-2]);
+    fitY.push_back(prev_y[prev_size-2]);
+    fitT.push_back(-1 * PATH_TIMESTEP);
+  }
+
+  if (prev_size > 1) {
+    start_x = prev_x[prev_size-1];
+    fitX.push_back(prev_x[prev_size-1]);
+    fitY.push_back(prev_y[prev_size-1]);
+    fitT.push_back(0.0);
+  }
+
+
+
+  vector<double> xy;
+  if (prev_size == 0) {
+    xy = getXY(ss[0], dd[0], maps_s, maps_x, maps_y);
+    start_x = xy[0];
+    fitX.push_back(xy[0]);
+    fitY.push_back(xy[1]);
+    fitT.push_back(0.0);
+  }
+
+//  cout << ")) 3" << endl;
+  xy = getXY(ss[(int)traj_size/2], dd[(int)traj_size/2], maps_s, maps_x, maps_y);
+  fitX.push_back(xy[0]);
+  fitY.push_back(xy[1]);
+  fitT.push_back((double)((int)traj_size/2 * PATH_TIMESTEP));
+
+//  cout << ")) 4" << endl;
+  xy = getXY(ss[traj_size-1], dd[traj_size-1], maps_s, maps_x, maps_y);
+  fitX.push_back(xy[0]);
+  fitY.push_back(xy[1]);
+  fitT.push_back((double)(traj_size-1) * PATH_TIMESTEP);
+
+//  cout << ")) 5" << endl;
+//  xy = getXY(ss[traj_size-1] + 5, dd[traj_size-1], maps_s, maps_x, maps_y);
+//  fitX.push_back(xy[0]);
+//  fitY.push_back(xy[1]);
+
+  end_x = xy[0];
+
+  double delta_x = (end_x - start_x)/(traj_size + 1);
+
+//  print_coeffs("fitX = ", fitX);
+//  print_coeffs("fitY = ", fitY);
+//  print_coeffs("fitT = ", fitT);
+
+
+//  tk::spline spl;
+//  spl.set_points(fitX, fitY);
+
+  // Makine it all to splines
+  tk::spline splX;
+  splX.set_points(fitT, fitX);
+  tk::spline splY;
+  splY.set_points(fitT, fitY);
+
+  vector<double> pathX;
+  vector<double> pathY;
+
+//  vector<double> path1X;
+//  vector<double> path1Y;
+
+//  double x = start_x;
+  double t = 0.0;
+  double ft = 0.2;
+  double delta_t = PATH_TIMESTEP;
+  double px;
+  double py;
+  while (t <= tt[traj_size-1] + 0.001 /* && x <= end_x */) {
+//    path1X.push_back(x);
+//    path1Y.push_back(spl(x));
+    pathX.push_back(splX(t));
+    pathY.push_back(splY(t));
+
+    t += delta_t;
+//    x += delta_x;
+  }
+
+  assert(tt.size() == pathX.size());
+
+  // Check distance difference
+  double sd_sum = 0;
+  double xy_sum = 0;
+  for (int i = 0; i < tt.size()-1; ++i) {
+    double sd_dist = distance(ss[i], dd[i], ss[i+1], dd[i+1]);
+    double xy_dist = distance(pathX[i], pathY[i], pathX[i+1], pathY[i+1]);
+    sd_sum += sd_dist;
+    xy_sum += xy_dist;
+  }
+
+  cout << "sd_sum = " << sd_sum << endl;
+  cout << "xy_sum = " << xy_sum << endl;
+
+
+  if (xy_sum > sd_sum) {
+    // resampling with lower rates
+    cout << "resampling ..." << endl;
+    pathX.clear();
+    pathY.clear();
+    t = 0.0;
+    delta_t = PATH_TIMESTEP * (sd_sum/xy_sum);
+    while (t <= tt[traj_size-1] + 0.001) {
+      pathX.push_back(splX(t));
+      pathY.push_back(splY(t));
+      t += delta_t;
+    }
+  }
+
+  // Check distance difference [2]
+  sd_sum = 0;
+  xy_sum = 0;
+  for (int i = 0; i < tt.size()-1; ++i) {
+    double sd_dist = distance(ss[i], dd[i], ss[i+1], dd[i+1]);
+    double xy_dist = distance(pathX[i], pathY[i], pathX[i+1], pathY[i+1]);
+    sd_sum += sd_dist;
+    xy_sum += xy_dist;
+  }
+
+  cout << "sd_sum 2 = " << sd_sum << endl;
+  cout << "xy_sum 2 = " << xy_sum << endl;
+
+  return {pathX, pathY};
+
+//  return {fitX, fitY};
+
+
+
+  //auto xy_traj = getXYPath(traj_data[0], traj_data[1], traj_data[2], maps_s, maps_x, maps_y);
+
+
+/*
+  // Connect to previous path
+  if (prev_x.size() > 0) {
+    int last_idx = prev_x.size() - 1;
+    double disp_x = prev_x[last_idx] - xy_traj[0][0];
+    double disp_y = prev_y[last_idx] - xy_traj[1][0];
+    // Move next path so it's connected with prev path
+    for (int i = 0; i < xy_traj[0].size(); ++i) {
+      xy_traj[0][i] += disp_x;
+      xy_traj[1][i] += disp_y;
+    }
+  }
+*/
+
+//  return xy_traj;
+
+}
+
 
 
 void prepare_log() {

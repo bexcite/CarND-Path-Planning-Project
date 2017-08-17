@@ -138,7 +138,7 @@ int main() {
 
 
           int maxPoints = 50;
-          double targetSpeed = 49.5 * 1609.344 / 3600.0;
+          double targetSpeed = 21.0; //49.5 * 1609.344 / 3600.0;
 
 
 
@@ -395,7 +395,7 @@ int main() {
 
 //                cout << "[] using new trajectory" << endl;
 
-                xy = getXYPathConnected(previous_path_x, previous_path_y, traj, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+                xy = getXYPathConnected1(previous_path_x, previous_path_y, car_x, car_y, car_yaw, traj, map_waypoints_s, map_waypoints_x, map_waypoints_y);
 
                 int path_next_idx = 1;
 

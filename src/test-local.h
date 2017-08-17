@@ -370,8 +370,8 @@ void testLocalTrajectories(vector<double> maps_s, vector<double> maps_x, vector<
 
   cout << "read from logFile " << j.size() << " lines" << endl;
 
-  unsigned long start = 10200; //413; //154 (1046, 873)
-  unsigned long end = start + 150; // j.size();
+  unsigned long start = 1275; //413; //154 (1046, 873)
+  unsigned long end = start + 15; // j.size();
 
   bool plot_first = true;
   int plot_first_max = 1;
@@ -469,7 +469,7 @@ void testLocalTrajectories(vector<double> maps_s, vector<double> maps_x, vector<
 
 
     // Next Values
-    plt::plot(next_x_vals, next_y_vals, "bo");
+//    plt::plot(next_x_vals, next_y_vals, "bo");
 
 
 
@@ -486,13 +486,15 @@ void testLocalTrajectories(vector<double> maps_s, vector<double> maps_x, vector<
 //    plt::plot(xy[0], xy[1], "bo");
 
     // Prev points
-//    plt::plot(prev_x, prev_y, "ro");
+    plt::plot(prev_x, prev_y, "ro");
     plt::annotate("END", prev_x[prev_x.size()-1], prev_y[prev_x.size()-1]);
 
 
 
     if (prev_x.size() > 0) {
       auto xy_conn = getXYPathConnected(prev_x, prev_y, car_traj, maps_s, maps_x, maps_y);
+
+      auto xy_conn1 = getXYPathConnected1(prev_x, prev_y, car_x, car_y, car_yaw, car_traj, maps_s, maps_x, maps_y);
 
 //      auto traj_data = getSDbyTraj(car_traj, PATH_TIMESTEP /*TRAJ_TIMESTEP * 2 */ /*, timeShift*/);
 //      auto xy_conn = getXYPath(traj_data[0], traj_data[1], traj_data[2], maps_s, maps_x, maps_y);
@@ -528,7 +530,11 @@ void testLocalTrajectories(vector<double> maps_s, vector<double> maps_x, vector<
 //      auto xy_conn = getXYPathFromTraj(car_traj, maps_s, maps_x, maps_y);
 
 
-      plt::plot(xy_conn[0], xy_conn[1], "g>");
+//      plt::plot(xy_conn[0], xy_conn[1], "g>");
+
+      plt::plot(xy_conn1[0], xy_conn1[1], "r*");
+
+//      plt::plot(xy_conn1[2], xy_conn1[3], "ys");
 
 //      plt::plot(xy_conn[3], xy_conn[4], "yo");
     }
