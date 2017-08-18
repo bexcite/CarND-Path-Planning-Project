@@ -138,7 +138,7 @@ int main() {
 
 
           int maxPoints = 50;
-          double targetSpeed = 21.0; //49.5 * 1609.344 / 3600.0;
+          double targetSpeed = SPEED_LIMIT; //49.5 * 1609.344 / 3600.0;
 
 
 
@@ -232,7 +232,7 @@ int main() {
 //            print_coeffs("curr_d = ", {curr_d, curr_d_v, curr_d_a});
 
 //            s_start[0] = curr_s;
-            double alpha = 0.5;
+            double alpha = 0.35;
             s_start[0] = end_path_s * alpha + curr_s * (1 - alpha);
 
             s_start[1] = curr_s_v;

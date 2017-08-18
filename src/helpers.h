@@ -1224,7 +1224,7 @@ public:
 
   // Returns {lane_num, }
   vector<double> estimateLane(int lane, double car_s, double car_d, double end_s, double end_d) {
-    double s_start = car_s - 2 * CAR_LENGTH;
+    double s_start = car_s - 3 * CAR_LENGTH;
 
     auto closest = getClosestCar(s_start, car_d, lane);
 
