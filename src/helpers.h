@@ -552,6 +552,7 @@ vector<vector<double> > getXYPathFromTraj(Trajectory traj, vector<double> maps_s
 }
 
 
+// THIS IS AN OLD METHOD, look for getXYPathConnected1() :)
 vector<vector<double> > getXYPathConnected(vector<double> prev_x, vector<double> prev_y, Trajectory traj, vector<double> maps_s, vector<double> maps_x, vector<double> maps_y, double timeShift = 0.0) {
 
   auto xy_traj = getXYPathFromTraj(traj, maps_s, maps_x, maps_y, timeShift);
