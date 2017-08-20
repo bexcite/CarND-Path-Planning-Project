@@ -691,7 +691,7 @@ vector<vector<double> > getXYPathConnected1(vector<double> prev_x, vector<double
 
 
   if (xy_sum > sd_sum) {
-    // resampling with lower rates
+    // resampling with lower/higher rates
     cout << "resampling ..." << endl;
     pathX.clear();
     pathY.clear();
@@ -1026,12 +1026,18 @@ public:
   }
 
   // Returns {lane_num, }
-  vector<double> estimateLane(int lane, double car_s, double car_d, double end_s, double end_d) {
-    double s_start = car_s - 3 * CAR_LENGTH;
+  vector<double> estimateLane(int lane, double car_s, double car_d, double car_speed, double end_s, double end_d) {
+//    double s_start = car_s - 3 * CAR_LENGTH;
+
+    double s_start = car_s - 20;
 
     auto closest = getClosestCar(s_start, car_d, lane);
 
-    double safe_distance = (end_s + 1 * CAR_LENGTH) - s_start;
+//    double safe_distance = (end_s + 1 * CAR_LENGTH) - s_start;
+//    cout << "safe_distance = " << safe_distance << endl;
+    double safe_distance = 50;
+
+
     if (!closest.empty()) {
       double dist = closest[5] - s_start;
       if (dist < safe_distance) {
@@ -1102,6 +1108,11 @@ Trajectory genTraj(double tLane, double tSpeed, double car_s, double car_d, vect
       T = 3.0;
     }
   }
+
+  // Threshold to SPEED_LIMIT (not all cars moving in speed limit at reviewer's simulator :)
+  tSpeed = min(tSpeed, SPEED_LIMIT);
+
+  cout << "gen traj for tSpeed = " << tSpeed << endl;
 
   double end_d = (2.1 + LANE_WIDTH * tLane);
 

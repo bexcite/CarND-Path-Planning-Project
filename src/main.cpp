@@ -259,13 +259,13 @@ int main() {
           if (hState.path) {
             // Get current planned speed
             double planned_speed = poly_calc(hState.prev_traj.s_coeffs, hState.prev_traj.T, 1);
-            cout << "planned speed = " << planned_speed << endl;
+//            cout << "planned speed = " << planned_speed << endl;
 
             for (int i = 0; i < adj_lanes.size(); ++i) {
               int lc = adj_lanes[i]; // line candidate
 
               // Estimate the possibility of change to that line with the speed param
-              auto lc_data = sf.estimateLane(lc, car_s, car_d, s_start[0], d_start[0]);
+              auto lc_data = sf.estimateLane(lc, car_s, car_d, car_speed_m, s_start[0], d_start[0]);
 //              cout << "eval lane L" << lc << endl;
 //              print_coeffs("lc_data = ", lc_data);
 
@@ -434,7 +434,19 @@ int main() {
             cout << "next_vals.size = " << next_x_vals.size() << " from {"
                  << next_x_vals[0] << ", " << next_y_vals[0] << "} to {"
                  << next_x_vals[next_x_vals.size()-1] << ", " << next_y_vals[next_y_vals.size()-1]
-                 << "}" << endl;
+                 << "}";
+
+            // Check max speed in the resulting next_vals
+            double max_dist = 0;
+            for (int i = 1; i < next_x_vals.size(); ++i) {
+              double dist = distance(next_x_vals[i-1], next_y_vals[i-1], next_x_vals[i], next_y_vals[i]);
+              if (dist > max_dist) {
+                max_dist = dist;
+              }
+            }
+            cout << ", ms = " << (max_dist/0.02) << endl;
+
+
           } else {
             cout << "next_vals.size = " << next_x_vals.size() << endl;
           }
@@ -447,7 +459,7 @@ int main() {
 
           auto msg = "42[\"control\","+ msgJson.dump()+"]";
 
-          //this_thread::sleep_for(chrono::milliseconds(1000));
+          this_thread::sleep_for(chrono::milliseconds(200));
           ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
 
         }
